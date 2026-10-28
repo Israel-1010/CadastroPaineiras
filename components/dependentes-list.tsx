@@ -69,7 +69,10 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
     )
   }
 
-  /** Dependente sem foto: salva a foto escolhida e já envia às catracas */
+  /**
+   * Dependente sem foto: o servidor envia a foto às catracas e só salva se o facial aceitar.
+   * Se a catraca recusar, nada é salvo e o cartão continua pedindo uma foto nova.
+   */
   const handleNovaFoto = async (dependente: Dependente, fotoUrl: string) => {
     setEnvioDe(dependente.id, { status: "enviando" })
     const resp = await fetch(`/api/dependentes/${dependente.id}`, {
@@ -79,11 +82,12 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
     }).catch(() => null)
     const json = await resp?.json().catch(() => ({}))
     if (!resp?.ok) {
+      if (json?.catraca) return setEnvioDe(dependente.id, { status: "erro", mensagem: json.error })
       const motivo = resp?.status === 401 ? "sessão expirada, faça login novamente" : json?.error || "erro de conexão"
       return setEnvioDe(dependente.id, { status: "erro", mensagem: `Não foi possível salvar a foto (${motivo}).` })
     }
     handleSaveDependente({ ...dependente, ...json.dependente })
-    await handleEnviar(dependente.id)
+    setEnvioDe(dependente.id, { status: "ok", mensagem: "Foto salva e enviada às catracas!" })
   }
 
   const handleSaveDependente = (updatedDependente: Dependente) => {
@@ -191,6 +195,11 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                     </>
                   )}
 
+                  {!dependente.foto_url && envio[dependente.id]?.status === "enviando" && (
+                    <p className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]">
+                      <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> Enviando a foto às catracas...
+                    </p>
+                  )}
                   {envio[dependente.id]?.status === "ok" && (
                     <p className="flex items-center gap-1.5 text-sm text-green-700">
                       <CheckCircle2 className="w-4 h-4 shrink-0" /> {envio[dependente.id].mensagem}

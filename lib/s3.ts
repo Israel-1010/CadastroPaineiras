@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 
 export const PHOTO_PREFIX = "dependentes/"
 
@@ -53,6 +53,15 @@ export async function putObject(key: string, body: Buffer, contentType: string) 
       // sem ACL (Bucket Owner Enforced)
     }),
   )
+}
+
+/** Apaga uma foto enviada (best effort; nunca lança) */
+export async function deleteObject(key: string) {
+  try {
+    await s3().send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET!, Key: key }))
+  } catch (err) {
+    console.warn("[s3] não consegui apagar", key, (err as Error).message)
+  }
 }
 
 export async function getObject(key: string) {
