@@ -1,0 +1,195 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* =========================================================
+   PAINEIRAS – PALETA
+   - Magenta institucional: #EC008B
+   - Variações: #C20073 (escuro), #F36CB8 (claro)
+   - Neutros pensados p/ boa leitura
+   ========================================================= */
+
+:root {
+  /* Fundo e textos (modo claro) */
+  --background: oklch(1 0 0);                 /* branco */
+  --foreground: oklch(0.16 0 0);              /* ~gray-900 */
+
+  /* Cartões/popovers */
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --popover: var(--background);
+  --popover-foreground: var(--foreground);
+
+  /* ======= BRAND ======= */
+  --primary: #EC008B;                         /* Magenta Paineiras */
+  --primary-foreground: #ffffff;
+  --accent: #F36CB8;                          /* Magenta claro */
+  --accent-foreground: oklch(0.18 0 0);       /* texto escuro sobre magenta claro */
+
+  /* Secundário / Muted / Borda */
+  --secondary: oklch(0.97 0 0);               /* ~gray-50 */
+  --secondary-foreground: oklch(0.24 0 0);    /* ~gray-800 */
+  --muted: oklch(0.97 0 0);                   /* ~gray-50 */
+  --muted-foreground: oklch(0.56 0 0);        /* ~gray-500 */
+  --border: oklch(0.92 0 0);                  /* ~gray-200 */
+  --input: oklch(0.92 0 0);                   /* ~gray-200 */
+  --ring: #EC008B;                             /* foco magenta */
+
+  /* Destructive (vermelhos) */
+  --destructive: oklch(0.65 0.25 27);         /* vermelho acessível */
+  --destructive-foreground: #ffffff;
+
+  /* Gráficos (paleta coerente) */
+  --chart-1: #EC008B; /* magenta */
+  --chart-2: #6F72F2; /* violeta frio */
+  --chart-3: #00A3FF; /* azul */
+  --chart-4: #1EC28B; /* verde */
+  --chart-5: #FFC24D; /* amarelo */
+
+  /* Raio e Sidebar */
+  --radius: 0.75rem;                          /* um pouco mais suave */
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.16 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: oklch(0.18 0 0);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+.dark {
+  /* Fundo e textos (modo escuro) */
+  --background: oklch(0.16 0 0);              /* ~gray-900 */
+  --foreground: oklch(0.98 0 0);              /* branco */
+
+  /* Cartões/popovers */
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --popover: var(--background);
+  --popover-foreground: var(--foreground);
+
+  /* ======= BRAND ======= */
+  --primary: #EC008B;                         /* mantém magenta no dark */
+  --primary-foreground: #ffffff;
+  --accent: #F36CB8;
+  --accent-foreground: oklch(0.16 0 0);
+
+  /* Secundário / Muted / Borda */
+  --secondary: oklch(0.27 0 0);               /* ~gray-700 */
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.27 0 0);
+  --muted-foreground: oklch(0.72 0 0);        /* ~gray-400 */
+  --border: oklch(0.32 0 0);                  /* ~gray-600 */
+  --input: oklch(0.32 0 0);
+  --ring: #EC008B;
+
+  /* Destructive */
+  --destructive: oklch(0.56 0.22 25);
+  --destructive-foreground: #ffffff;
+
+  /* Gráficos */
+  --chart-1: #EC008B;
+  --chart-2: #8B8EF7;
+  --chart-3: #3AB8FF;
+  --chart-4: #32D3A0;
+  --chart-5: #FFD36A;
+
+  /* Sidebar */
+  --sidebar: oklch(0.20 0 0);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: oklch(0.16 0 0);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+/* Mantém seu mapeamento de variáveis para Tailwind */
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Base: mantém sua configuração */
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground; }
+}
+
+/* =========================================================
+   UTILITÁRIOS OPCIONAIS (usáveis no JSX)
+   ========================================================= */
+
+/* Botão primário com magenta */
+.btn-brand {
+  @apply bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 active:opacity-90 transition-colors;
+}
+
+/* Link e focos em magenta */
+.link-brand {
+  color: var(--primary);
+}
+.link-brand:hover {
+  opacity: .9;
+}
+
+/* Bordas/inputs com foco magenta */
+.input-brand {
+  @apply border-[var(--border)] focus:border-[var(--primary)] focus:ring-[var(--primary)];
+}
+
+/* Cartão com sombra suave “magenta” */
+.shadow-brand {
+  box-shadow: 0 12px 32px -12px rgba(236, 0, 139, 0.25);
+}
