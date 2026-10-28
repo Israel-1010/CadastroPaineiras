@@ -55,6 +55,9 @@ export interface Dependente {
   data_nascimento: string
   foto_url?: string | null
   colaborador_id: string
+  /** null = foto nunca enviada às catracas; true = facial aceitou; false = recusou */
+  foto_aceita?: boolean | null
+  foto_enviada_em?: string | null
 }
 
 export interface Admin {

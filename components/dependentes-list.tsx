@@ -75,29 +75,28 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
     })
 
   /**
-   * O servidor envia a foto às catracas e só salva se o facial aceitar.
-   * Se recusar, a foto é descartada e o cartão volta para a foto anterior.
+   * Envia às catracas a foto nova (se houver) ou reenvia a já salva.
+   * O servidor só grava a foto nova se o facial aceitar e registra o resultado em foto_aceita.
    */
   const handleEnviar = async (dependente: Dependente) => {
-    const fotoUrl = pendente[dependente.id]
-    if (!fotoUrl) return
+    const fotoNova = pendente[dependente.id]
     setEnvioDe(dependente.id, { status: "enviando" })
     const resp = await fetch(`/api/dependentes/${dependente.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ foto_url: fotoUrl }),
+      body: JSON.stringify(fotoNova ? { foto_url: fotoNova } : {}),
     }).catch(() => null)
     const json = await resp?.json().catch(() => ({}))
+    if (json?.dependente) handleSaveDependente({ ...dependente, ...json.dependente })
     if (!resp?.ok) {
-      // Recusada pela catraca: o servidor já apagou o arquivo, então é preciso tirar outra
-      if (json?.catraca) {
-        descartarPendente(dependente.id)
-        return setEnvioDe(dependente.id, { status: "erro", mensagem: json.error })
-      }
-      const motivo = resp?.status === 401 ? "sessão expirada, faça login novamente" : json?.error || "erro de conexão"
-      return setEnvioDe(dependente.id, { status: "erro", mensagem: `Não foi possível enviar a foto (${motivo}).` })
+      // Recusada: o servidor já apagou o arquivo novo, então é preciso tirar outra
+      if (json?.descartada) descartarPendente(dependente.id)
+      const mensagem =
+        resp?.status === 401
+          ? "Sessão expirada. Faça login novamente."
+          : json?.error || "Não foi possível enviar a foto (erro de conexão). Tente novamente."
+      return setEnvioDe(dependente.id, { status: "erro", mensagem })
     }
-    handleSaveDependente({ ...dependente, ...json.dependente })
     descartarPendente(dependente.id)
     setEnvioDe(dependente.id, { status: "ok", mensagem: "Foto enviada às catracas com sucesso!" })
   }
@@ -202,7 +201,9 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                   {(() => {
                     const estado = envio[dependente.id]?.status
                     const temNova = Boolean(pendente[dependente.id])
-                    if (estado === "ok" && !temNova) {
+                    // Foto salva ainda não aceita pelo facial (nunca enviada ou recusada): pode (re)enviar
+                    const podeEnviar = temNova || (Boolean(dependente.foto_url) && dependente.foto_aceita !== true)
+                    if (!temNova && dependente.foto_aceita === true) {
                       return (
                         <Button disabled className="w-full bg-green-600 text-white disabled:opacity-100">
                           <CheckCircle2 className="w-4 h-4 mr-2" /> Foto enviada
@@ -213,8 +214,8 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                       <Button
                         className="w-full bg-[var(--primary)] text-white hover:opacity-90"
                         onClick={() => handleEnviar(dependente)}
-                        disabled={!temNova || estado === "enviando"}
-                        title={temNova ? undefined : "Tire ou escolha uma foto nova para enviar"}
+                        disabled={!podeEnviar || estado === "enviando"}
+                        title={podeEnviar ? undefined : "Tire ou escolha uma foto para enviar"}
                       >
                         {estado === "enviando" ? (
                           <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</>
@@ -225,6 +226,12 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                     )
                   })()}
 
+                  {/* Recusa registrada em envio anterior (some quando há resultado novo nesta tela) */}
+                  {!envio[dependente.id] && !pendente[dependente.id] && dependente.foto_aceita === false && (
+                    <p className="flex items-start gap-1.5 text-sm text-red-600">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> A catraca recusou a última foto. Tire outra foto.
+                    </p>
+                  )}
                   {envio[dependente.id]?.status === "ok" && (
                     <p className="flex items-center gap-1.5 text-sm text-green-700">
                       <CheckCircle2 className="w-4 h-4 shrink-0" /> {envio[dependente.id].mensagem}
