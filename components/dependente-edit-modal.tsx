@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PhotoUpload } from "@/components/photo-upload"
 import { Save, X, Loader2, Send } from "lucide-react"
 import { isValidCPF, maskCPFInput, onlyDigits } from "@/lib/cpf"
+import { enviarAsCatracas } from "@/lib/terminais"
 import { DEPENDENCIA_LABEL, DEPENDENCIAS, normalizeDependencia, type Dependente } from "@/lib/types"
 
 interface DependenteEditModalProps {
@@ -68,26 +69,10 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
     }
   }, [dependente])
 
-  /** Envia cartão e face da foto salva aos terminais; retorna a mensagem de erro da face, se houver */
-  const syncTerminals = async (dependenteId: string): Promise<string | null> => {
+  const syncTerminals = async (dependenteId: string) => {
     setIsSyncingFace(true)
     try {
-      // Cartão de acesso (não bloqueia; servidor usa CPF e nome já salvos no banco)
-      await fetch("/api/dahua/card", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dependente_id: dependenteId }),
-      }).catch(() => null)
-
-      // Face nos terminais (servidor usa CPF, nome e foto já salvos no banco)
-      const faceRes = await fetch("/api/dahua/face", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dependente_id: dependenteId }),
-      }).catch(() => null)
-      if (faceRes?.ok) return null
-      const faceJson = await faceRes?.json().catch(() => ({}))
-      return faceJson?.error || "erro de conexão"
+      return await enviarAsCatracas(dependenteId)
     } finally {
       setIsSyncingFace(false)
     }

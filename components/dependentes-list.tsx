@@ -5,11 +5,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Edit, Calendar, Award as IdCard, Users } from "lucide-react"
+import { Calendar, Award as IdCard, Users, Pencil, Send, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { DependenteEditModal } from "@/components/dependente-edit-modal"
 import { NovoDependenteModal } from "@/components/novo-dependente-modal"
+import { PhotoUpload } from "@/components/photo-upload"
 import { formatCPF } from "@/lib/cpf"
+import { enviarAsCatracas } from "@/lib/terminais"
 import { dependenciaLabel, normalizeDependencia, type Dependente } from "@/lib/types"
+
+type EstadoEnvio = { status: "enviando" | "ok" | "erro"; mensagem?: string }
 
 interface DependentesListProps {
   dependentes: Dependente[]
@@ -21,6 +25,8 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
   const [selectedDependente, setSelectedDependente] = useState<Dependente | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
+  // Situação do envio às catracas, por dependente
+  const [envio, setEnvio] = useState<Record<string, EstadoEnvio>>({})
 
   const formatDate = (raw: string) => {
   const m = String(raw || "").match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -56,6 +62,36 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
   const handleEditDependente = (dependente: Dependente) => {
     setSelectedDependente(dependente)
     setIsEditModalOpen(true)
+  }
+
+  const setEnvioDe = (id: string, estado: EstadoEnvio) => setEnvio((prev) => ({ ...prev, [id]: estado }))
+
+  const handleEnviar = async (id: string) => {
+    setEnvioDe(id, { status: "enviando" })
+    const erro = await enviarAsCatracas(id)
+    setEnvioDe(
+      id,
+      erro
+        ? { status: "erro", mensagem: `Não foi possível enviar a foto às catracas (${erro}). Tente novamente.` }
+        : { status: "ok", mensagem: "Foto enviada com sucesso!" },
+    )
+  }
+
+  /** Dependente sem foto: salva a foto escolhida e já envia às catracas */
+  const handleNovaFoto = async (dependente: Dependente, fotoUrl: string) => {
+    setEnvioDe(dependente.id, { status: "enviando" })
+    const resp = await fetch(`/api/dependentes/${dependente.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ foto_url: fotoUrl }),
+    }).catch(() => null)
+    const json = await resp?.json().catch(() => ({}))
+    if (!resp?.ok) {
+      const motivo = resp?.status === 401 ? "sessão expirada, faça login novamente" : json?.error || "erro de conexão"
+      return setEnvioDe(dependente.id, { status: "erro", mensagem: `Não foi possível salvar a foto (${motivo}).` })
+    }
+    handleSaveDependente({ ...dependente, ...json.dependente })
+    await handleEnviar(dependente.id)
   }
 
   const handleSaveDependente = (updatedDependente: Dependente) => {
@@ -105,10 +141,10 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
               className="rounded-2xl border-[var(--border)] hover:shadow-[0_16px_36px_-14px_rgba(236,0,139,.25)] transition-shadow bg-white"
             >
               <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <Avatar className="w-12 h-12 ring-2 ring-[var(--accent)]">
-                    <AvatarImage src={dependente.foto_url || "/placeholder.svg"} alt={dependente.nome_completo} />
-                    <AvatarFallback className="bg-[var(--secondary)] text-[var(--primary)] font-semibold">
+                <div className="flex items-center gap-4">
+                  <Avatar className="w-20 h-20 shrink-0 ring-2 ring-[var(--accent)]">
+                    <AvatarImage src={dependente.foto_url || "/placeholder.svg"} alt={dependente.nome_completo} className="object-cover" />
+                    <AvatarFallback className="bg-[var(--secondary)] text-[var(--primary)] text-xl font-semibold">
                       {getInitials(dependente.nome_completo)}
                     </AvatarFallback>
                   </Avatar>
@@ -125,6 +161,18 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                       </Badge>
                     </div>
                   </div>
+
+                  {/* Corrigir dados ou trocar a foto */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="self-start shrink-0 text-[var(--muted-foreground)] hover:bg-[var(--secondary)]"
+                    onClick={() => handleEditDependente(dependente)}
+                    title="Editar dados"
+                    aria-label="Editar dados"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Button>
                 </div>
               </CardHeader>
 
@@ -139,16 +187,40 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                   <span className="truncate">Nascimento: {formatDate(dependente.data_nascimento)}</span>
                 </div>
 
-                <div className="pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full bg-transparent hover:bg-[var(--secondary)]"
-                    onClick={() => handleEditDependente(dependente)}
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Editar
-                  </Button>
+                <div className="pt-2 space-y-2">
+                  {dependente.foto_url ? (
+                    <Button
+                      className="w-full bg-[var(--primary)] text-white hover:opacity-90"
+                      onClick={() => handleEnviar(dependente.id)}
+                      disabled={envio[dependente.id]?.status === "enviando"}
+                    >
+                      {envio[dependente.id]?.status === "enviando" ? (
+                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</>
+                      ) : (
+                        <><Send className="w-4 h-4 mr-2" /> Enviar foto</>
+                      )}
+                    </Button>
+                  ) : (
+                    <>
+                      <p className="text-xs text-amber-600">Sem foto. Tire ou escolha uma foto do dependente:</p>
+                      <PhotoUpload
+                        variant="buttons"
+                        userName={dependente.nome_completo}
+                        onPhotoChange={(url) => url && handleNovaFoto(dependente, url)}
+                      />
+                    </>
+                  )}
+
+                  {envio[dependente.id]?.status === "ok" && (
+                    <p className="flex items-center gap-1.5 text-sm text-green-700">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" /> {envio[dependente.id].mensagem}
+                    </p>
+                  )}
+                  {envio[dependente.id]?.status === "erro" && (
+                    <p className="flex items-start gap-1.5 text-sm text-red-600">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {envio[dependente.id].mensagem}
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

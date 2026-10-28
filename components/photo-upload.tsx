@@ -5,7 +5,7 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Camera, X, Loader2, Upload, Video, RotateCcw } from "lucide-react"
+import { Camera, X, Loader2, Upload, Video, RotateCcw, ImageIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
@@ -14,9 +14,17 @@ interface PhotoUploadProps {
   onPhotoChange: (photoUrl: string) => void
   userName: string
   onUploadingChange?: (uploading: boolean) => void
+  /** "buttons": só os botões Câmera/Galeria (cartão do dependente sem foto) */
+  variant?: "full" | "buttons"
 }
 
-export function PhotoUpload({ currentPhotoUrl, onPhotoChange, userName, onUploadingChange }: PhotoUploadProps) {
+export function PhotoUpload({
+  currentPhotoUrl,
+  onPhotoChange,
+  userName,
+  onUploadingChange,
+  variant = "full",
+}: PhotoUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentPhotoUrl || null)
@@ -189,6 +197,18 @@ export function PhotoUpload({ currentPhotoUrl, onPhotoChange, userName, onUpload
 
   return (
     <div className="space-y-4">
+      {variant === "buttons" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" variant="outline" onClick={startCamera} disabled={isUploading}>
+            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+            <span>Câmera</span>
+          </Button>
+          <Button type="button" variant="outline" onClick={triggerFileInput} disabled={isUploading}>
+            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+            <span>Galeria</span>
+          </Button>
+        </div>
+      ) : (
       <div className="flex items-center space-x-4">
         {/* Avatar clicável → abre câmera */}
         <div
@@ -235,6 +255,7 @@ export function PhotoUpload({ currentPhotoUrl, onPhotoChange, userName, onUpload
           <p className="text-xs text-gray-500">Formatos: JPG/PNG. Máx 5MB.</p>
         </div>
       </div>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -246,7 +267,6 @@ export function PhotoUpload({ currentPhotoUrl, onPhotoChange, userName, onUpload
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={handleFileSelect}
         className="hidden"
         disabled={isUploading}
