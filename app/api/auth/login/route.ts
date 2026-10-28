@@ -4,7 +4,7 @@ import { clientIp, setSessionCookie } from "@/lib/auth"
 import { rateLimit } from "@/lib/rate-limit"
 import { loginColaboradorSchema } from "@/lib/validation"
 
-const INVALID = "RE ou CPF invÃ¡lidos. Verifique os dados e tente novamente."
+const INVALID = "RE ou CPF inválidos. Verifique os dados e tente novamente."
 
 export async function POST(request: NextRequest) {
   try {

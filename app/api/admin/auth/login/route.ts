@@ -6,15 +6,15 @@ import { audit, clientIp, setSessionCookie } from "@/lib/auth"
 import { rateLimit, resetRateLimit } from "@/lib/rate-limit"
 import { loginAdminSchema } from "@/lib/validation"
 
-const INVALID = "UsuÃ¡rio ou senha invÃ¡lidos"
-// Hash de uma senha aleatÃ³ria: mantÃ©m o tempo de resposta igual quando o usuÃ¡rio nÃ£o existe
+const INVALID = "Usuário ou senha inválidos"
+// Hash de uma senha aleatória: mantém o tempo de resposta igual quando o usuário não existe
 const DUMMY_HASH = hashSync(randomUUID(), 10)
 
 export async function POST(request: NextRequest) {
   try {
     const parsed = loginAdminSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) {
-      return NextResponse.json({ error: "UsuÃ¡rio e senha sÃ£o obrigatÃ³rios" }, { status: 400 })
+      return NextResponse.json({ error: "Usuário e senha são obrigatórios" }, { status: 400 })
     }
     const { username, password } = parsed.data
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
     }
 
-    // SÃ³ aceita hash bcrypt; senhas em texto puro no banco nunca sÃ£o aceitas
+    // Só aceita hash bcrypt; senhas em texto puro no banco nunca são aceitas
     const hasHash = Boolean(admin?.password_hash?.startsWith("$2"))
     const valid = await compare(password, hasHash ? admin!.password_hash : DUMMY_HASH)
 
