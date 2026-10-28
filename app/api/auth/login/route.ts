@@ -4,7 +4,7 @@ import { clientIp, setSessionCookie } from "@/lib/auth"
 import { rateLimit } from "@/lib/rate-limit"
 import { loginColaboradorSchema } from "@/lib/validation"
 
-const INVALID = "RE ou CPF inválidos. Verifique os dados e tente novamente."
+const INVALID = "RE ou CPF invÃ¡lidos. Verifique os dados e tente novamente."
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: INVALID }, { status: 401 })
     }
 
-    return setSessionCookie(NextResponse.json({ colaborador }), "colaborador", colaborador.id)
+    return setSessionCookie(request, NextResponse.json({ colaborador }), "colaborador", colaborador.id)
   } catch (error) {
     console.error("[login] erro:", (error as Error).message)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })

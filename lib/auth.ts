@@ -34,13 +34,13 @@ export async function getAdmin(): Promise<Admin | null> {
   return data
 }
 
-export async function setSessionCookie(res: NextResponse, role: SessionRole, id: string) {
-  res.cookies.set(SESSION_COOKIE[role], await signSession(id, role), sessionCookieOptions())
+export async function setSessionCookie(req: Request, res: NextResponse, role: SessionRole, id: string) {
+  res.cookies.set(SESSION_COOKIE[role], await signSession(id, role), sessionCookieOptions(req))
   return res
 }
 
-export function clearSessionCookie(res: NextResponse, role: SessionRole) {
-  res.cookies.set(SESSION_COOKIE[role], "", { ...sessionCookieOptions(), maxAge: 0 })
+export function clearSessionCookie(req: Request, res: NextResponse, role: SessionRole) {
+  res.cookies.set(SESSION_COOKIE[role], "", { ...sessionCookieOptions(req), maxAge: 0 })
   return res
 }
 

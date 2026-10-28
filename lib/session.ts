@@ -67,11 +67,19 @@ export async function verifySession(token: string | undefined, role: SessionRole
   }
 }
 
-export function sessionCookieOptions() {
+// Cookie "Secure" só quando o acesso é por HTTPS (direto ou via proxy que envia x-forwarded-proto);
+// em HTTP o navegador descartaria o cookie. COOKIE_SECURE=true|false força o valor.
+function isSecureRequest(req: Request) {
+  if (process.env.COOKIE_SECURE === "true") return true
+  if (process.env.COOKIE_SECURE === "false") return false
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0].trim()
+  return (proto ?? new URL(req.url).protocol.replace(":", "")) === "https"
+}
+
+export function sessionCookieOptions(req: Request) {
   return {
     httpOnly: true,
-    // COOKIE_SECURE=false permite rodar em produção via HTTP (ex.: rede interna sem TLS)
-    secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
+    secure: isSecureRequest(req),
     sameSite: "lax" as const,
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,

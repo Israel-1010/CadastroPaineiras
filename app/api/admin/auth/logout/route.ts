@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { clearSessionCookie } from "@/lib/auth"
 
-export async function POST() {
-  return clearSessionCookie(NextResponse.json({ ok: true }), "admin")
+export async function POST(request: Request) {
+  return clearSessionCookie(request, NextResponse.json({ ok: true }), "admin")
 }
