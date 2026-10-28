@@ -10,6 +10,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2, Clock3, Loader2, Eye, EyeOff } from "lucide-react"
 import { formatCPF, maskCPF, onlyDigits } from "@/lib/cpf"
+import { DEPENDENCIA_LABEL, DEPENDENCIAS, dependenciaLabel, normalizeDependencia } from "@/lib/types"
+
+const FILHOS = new Set<string>(["Filho", "Filha", "Enteado"])
+const CONJUGES = new Set<string>(["Conjuge", "Companheiro", "Esposa", "Esposo"])
 
 interface Dependente {
   id: string
@@ -75,7 +79,8 @@ export function DependentesAdminList() {
         (dependente.colaborador?.nome_completo ?? "").toLowerCase().includes(term) ||
         (dependente.colaborador?.re ?? "").toLowerCase().includes(term)
 
-      const matchesDependencia = filterDependencia === "todos" || dependente.dependencia === filterDependencia
+      const matchesDependencia =
+        filterDependencia === "todos" || normalizeDependencia(dependente.dependencia) === filterDependencia
       const matchesGenero = filterGenero === "todos" || dependente.genero === filterGenero
 
       return matchesSearch && matchesDependencia && matchesGenero
@@ -100,16 +105,10 @@ export function DependentesAdminList() {
   }
 
   const getDependenciaColor = (dependencia: string) => {
-    switch (dependencia.toLowerCase()) {
-      case "filho":
-      case "filha":
-        return "bg-green-100 text-green-800"
-      case "esposa":
-      case "esposo":
-        return "bg-blue-100 text-blue-800"
-      default:
-        return "bg-slate-100 text-slate-800"
-    }
+    const d = normalizeDependencia(dependencia)
+    if (FILHOS.has(d)) return "bg-green-100 text-green-800"
+    if (CONJUGES.has(d)) return "bg-blue-100 text-blue-800"
+    return "bg-slate-100 text-slate-800"
   }
 
   const getGeneroColor = (genero: string) => {
@@ -221,10 +220,9 @@ export function DependentesAdminList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todas as dependências</SelectItem>
-                <SelectItem value="Filho">Filho</SelectItem>
-                <SelectItem value="Filha">Filha</SelectItem>
-                <SelectItem value="Esposa">Esposa</SelectItem>
-                <SelectItem value="Esposo">Esposo</SelectItem>
+                {DEPENDENCIAS.map((d) => (
+                  <SelectItem key={d} value={d}>{DEPENDENCIA_LABEL[d]}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -279,7 +277,7 @@ export function DependentesAdminList() {
               <Users className="w-8 h-8 text-purple-600" />
               <div>
                 <p className="text-2xl font-bold text-slate-900">
-                  {dependentes.filter((d) => d.dependencia === "Filho" || d.dependencia === "Filha").length}
+                  {dependentes.filter((d) => FILHOS.has(normalizeDependencia(d.dependencia))).length}
                 </p>
                 <p className="text-sm text-slate-600">Filhos</p>
               </div>
@@ -293,7 +291,7 @@ export function DependentesAdminList() {
               <Users className="w-8 h-8 text-orange-600" />
               <div>
                 <p className="text-2xl font-bold text-slate-900">
-                  {dependentes.filter((d) => d.dependencia === "Esposa" || d.dependencia === "Esposo").length}
+                  {dependentes.filter((d) => CONJUGES.has(normalizeDependencia(d.dependencia))).length}
                 </p>
                 <p className="text-sm text-slate-600">Cônjuges</p>
               </div>
@@ -334,7 +332,9 @@ export function DependentesAdminList() {
                   <div className="flex-1 min-w-0">
                     <CardTitle className="text-lg leading-tight break-words">{dependente.nome_completo}</CardTitle>
                     <div className="flex items-center space-x-2 mt-1">
-                      <Badge className={getDependenciaColor(dependente.dependencia)}>{dependente.dependencia}</Badge>
+                      <Badge className={getDependenciaColor(dependente.dependencia)}>
+                        {dependenciaLabel(dependente.dependencia)}
+                      </Badge>
                       <Badge variant="outline" className={getGeneroColor(dependente.genero)}>
                         {dependente.genero}
                       </Badge>

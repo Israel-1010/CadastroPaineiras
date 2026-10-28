@@ -9,7 +9,7 @@ import { Plus, Edit, Calendar, Award as IdCard, Users } from "lucide-react"
 import { DependenteEditModal } from "@/components/dependente-edit-modal"
 import { NovoDependenteModal } from "@/components/novo-dependente-modal"
 import { formatCPF } from "@/lib/cpf"
-import type { Dependente } from "@/lib/types"
+import { dependenciaLabel, normalizeDependencia, type Dependente } from "@/lib/types"
 
 interface DependentesListProps {
   dependentes: Dependente[]
@@ -40,9 +40,9 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
 
   // pills com identidade do clube
   const getDependenciaClass = (dependencia: string) => {
-    const d = dependencia.toLowerCase()
-    if (d === "filho" || d === "filha") return "bg-[var(--accent)] text-[var(--accent-foreground)] border border-transparent"
-    if (d === "esposa" || d === "esposo") return "bg-[var(--secondary)] text-[var(--accent-foreground)] border border-[var(--border)]"
+    const d = normalizeDependencia(dependencia)
+    if (["Filho", "Filha", "Enteado"].includes(d)) return "bg-[var(--accent)] text-[var(--accent-foreground)] border border-transparent"
+    if (["Conjuge", "Companheiro", "Esposa", "Esposo"].includes(d)) return "bg-[var(--secondary)] text-[var(--accent-foreground)] border border-[var(--border)]"
     return "bg-[var(--secondary)] text-[var(--accent-foreground)] border border-[var(--border)]"
   }
 
@@ -119,7 +119,7 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                     </CardTitle>
 
                     <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <Badge className={getDependenciaClass(dependente.dependencia)}>{dependente.dependencia}</Badge>
+                      <Badge className={getDependenciaClass(dependente.dependencia)}>{dependenciaLabel(dependente.dependencia)}</Badge>
                       <Badge variant="outline" className={getGeneroClass(dependente.genero)}>
                         {dependente.genero}
                       </Badge>

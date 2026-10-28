@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PhotoUpload } from "@/components/photo-upload"
 import { Save, X, UserPlus } from "lucide-react"
 import { isValidCPF, maskCPFInput, onlyDigits } from "@/lib/cpf"
-import type { Dependente } from "@/lib/types"
+import { DEPENDENCIA_LABEL, DEPENDENCIAS, type Dependente } from "@/lib/types"
 
 interface NovoDependenteModalProps {
   isOpen: boolean
@@ -189,10 +189,9 @@ export function NovoDependenteModal({ isOpen, onClose, onSave, colaboradorId }: 
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Filho">Filho</SelectItem>
-                  <SelectItem value="Filha">Filha</SelectItem>
-                  <SelectItem value="Esposa">Esposa</SelectItem>
-                  <SelectItem value="Esposo">Esposo</SelectItem>
+                  {DEPENDENCIAS.map((d) => (
+                    <SelectItem key={d} value={d}>{DEPENDENCIA_LABEL[d]}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

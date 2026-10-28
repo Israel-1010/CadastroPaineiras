@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PhotoUpload } from "@/components/photo-upload"
 import { Save, X, Loader2, Send } from "lucide-react"
 import { isValidCPF, maskCPFInput, onlyDigits } from "@/lib/cpf"
-import type { Dependente } from "@/lib/types"
+import { DEPENDENCIA_LABEL, DEPENDENCIAS, normalizeDependencia, type Dependente } from "@/lib/types"
 
 interface DependenteEditModalProps {
   dependente: Dependente | null
@@ -58,7 +58,7 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
         nome_completo: dependente.nome_completo,
         cpf: maskCPFInput(dependente.cpf),
         genero: dependente.genero,
-        dependencia: dependente.dependencia,
+        dependencia: normalizeDependencia(dependente.dependencia), // "filha" do banco -> "Filha"
         data_nascimento: toInputDate(dependente.data_nascimento),
         foto_url: dependente.foto_url || "",
       })
@@ -248,10 +248,9 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
               <Select value={formData.dependencia} onValueChange={(v) => setFormData((p) => ({ ...p, dependencia: v }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Filho">Filho</SelectItem>
-                  <SelectItem value="Filha">Filha</SelectItem>
-                  <SelectItem value="Esposa">Esposa</SelectItem>
-                  <SelectItem value="Esposo">Esposo</SelectItem>
+                  {DEPENDENCIAS.map((d) => (
+                    <SelectItem key={d} value={d}>{DEPENDENCIA_LABEL[d]}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

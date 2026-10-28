@@ -3,16 +3,18 @@ import { supabaseAdmin } from "@/lib/supabase/server"
 import { audit, getAdmin, unauthorized } from "@/lib/auth"
 import { chunk, normalizeCpfCell, normalizeDate, readImportFile } from "@/lib/planilha"
 import { dependenteSchema, firstIssue } from "@/lib/validation"
-import { DEPENDENCIAS, type ImportResult } from "@/lib/types"
+import { DEPENDENCIA_LABEL, DEPENDENCIAS, normalizeDependencia, type ImportResult } from "@/lib/types"
 
 export const runtime = "nodejs"
 
 // Gênero é opcional na planilha: quando vazio, é deduzido do parentesco
 const GENERO_POR_DEPENDENCIA: Record<string, string> = {
   Filho: "Masculino",
+  Enteado: "Masculino",
   Esposo: "Masculino",
   Filha: "Feminino",
   Esposa: "Feminino",
+  Mae: "Feminino",
 }
 
 /** "filho", "FILHO " -> "Filho" */
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
         result.errors.push({ row, error: "RE do colaborador é obrigatório" })
         continue
       }
-      const dependencia = normalizeEnum(parentesco, DEPENDENCIAS)
+      const dependencia = normalizeDependencia(parentesco)
       const genero = normalizeEnum(generoCelula, ["Masculino", "Feminino"]) || GENERO_POR_DEPENDENCIA[dependencia] || ""
       const parsed = dependenteSchema.safeParse({
         nome_completo,
@@ -59,7 +61,10 @@ export async function POST(request: NextRequest) {
         const msg = firstIssue(parsed.error)
         result.errors.push({
           row,
-          error: msg === "Dependência inválida" ? `Parentesco inválido. Use: ${DEPENDENCIAS.join(", ")}` : msg,
+          error:
+            msg === "Dependência inválida"
+              ? `Parentesco inválido. Use: ${DEPENDENCIAS.map((d) => DEPENDENCIA_LABEL[d]).join(", ")}`
+              : msg,
         })
         continue
       }

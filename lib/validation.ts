@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { isValidCPF, onlyDigits } from "@/lib/cpf"
-import { DEPENDENCIAS, GENEROS } from "@/lib/types"
+import { DEPENDENCIAS, GENEROS, normalizeDependencia } from "@/lib/types"
 
 /** "YYYY-MM-DD" válida, entre 1900-01-01 e hoje */
 export function isValidBirthDate(value: string) {
@@ -27,7 +27,10 @@ export const dependenteSchema = z.object({
   nome_completo: nome,
   cpf: cpfSchema,
   genero: z.enum(GENEROS, { errorMap: () => ({ message: "Gênero inválido" }) }),
-  dependencia: z.enum(DEPENDENCIAS, { errorMap: () => ({ message: "Dependência inválida" }) }),
+  dependencia: z
+    .string()
+    .transform(normalizeDependencia)
+    .pipe(z.enum(DEPENDENCIAS, { errorMap: () => ({ message: "Dependência inválida" }) })),
   data_nascimento: z.string().refine(isValidBirthDate, "Data de nascimento inválida"),
   foto_url: z.string().url().max(1000).nullish(),
 })
