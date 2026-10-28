@@ -9,7 +9,6 @@ import { Calendar, Award as IdCard, Users, Send, Loader2, CheckCircle2, AlertCir
 import { NovoDependenteModal } from "@/components/novo-dependente-modal"
 import { PhotoUpload } from "@/components/photo-upload"
 import { formatCPF } from "@/lib/cpf"
-import { enviarAsCatracas } from "@/lib/terminais"
 import { dependenciaLabel, normalizeDependencia, type Dependente } from "@/lib/types"
 
 type EstadoEnvio = { status: "enviando" | "ok" | "erro"; mensagem?: string }
@@ -24,6 +23,8 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
   // Situação do envio às catracas, por dependente
   const [envio, setEnvio] = useState<Record<string, EstadoEnvio>>({})
+  // Foto nova escolhida e ainda não enviada, por dependente
+  const [pendente, setPendente] = useState<Record<string, string>>({})
 
   const formatDate = (raw: string) => {
   const m = String(raw || "").match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -58,22 +59,28 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
 
   const setEnvioDe = (id: string, estado: EstadoEnvio) => setEnvio((prev) => ({ ...prev, [id]: estado }))
 
-  const handleEnviar = async (id: string) => {
-    setEnvioDe(id, { status: "enviando" })
-    const erro = await enviarAsCatracas(id)
-    setEnvioDe(
-      id,
-      erro
-        ? { status: "erro", mensagem: `Não foi possível enviar a foto às catracas (${erro}). Tente novamente.` }
-        : { status: "ok", mensagem: "Foto enviada com sucesso!" },
-    )
+  /** Foto nova escolhida (já no S3), ainda não enviada: mostra no cartão e habilita "Enviar foto" */
+  const handleNovaFoto = (id: string, fotoUrl: string) => {
+    setPendente((prev) => ({ ...prev, [id]: fotoUrl }))
+    setEnvio((prev) => {
+      const { [id]: _, ...resto } = prev
+      return resto
+    })
   }
 
+  const descartarPendente = (id: string) =>
+    setPendente((prev) => {
+      const { [id]: _, ...resto } = prev
+      return resto
+    })
+
   /**
-   * Dependente sem foto: o servidor envia a foto às catracas e só salva se o facial aceitar.
-   * Se a catraca recusar, nada é salvo e o cartão continua pedindo uma foto nova.
+   * O servidor envia a foto às catracas e só salva se o facial aceitar.
+   * Se recusar, a foto é descartada e o cartão volta para a foto anterior.
    */
-  const handleNovaFoto = async (dependente: Dependente, fotoUrl: string) => {
+  const handleEnviar = async (dependente: Dependente) => {
+    const fotoUrl = pendente[dependente.id]
+    if (!fotoUrl) return
     setEnvioDe(dependente.id, { status: "enviando" })
     const resp = await fetch(`/api/dependentes/${dependente.id}`, {
       method: "PATCH",
@@ -82,12 +89,17 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
     }).catch(() => null)
     const json = await resp?.json().catch(() => ({}))
     if (!resp?.ok) {
-      if (json?.catraca) return setEnvioDe(dependente.id, { status: "erro", mensagem: json.error })
+      // Recusada pela catraca: o servidor já apagou o arquivo, então é preciso tirar outra
+      if (json?.catraca) {
+        descartarPendente(dependente.id)
+        return setEnvioDe(dependente.id, { status: "erro", mensagem: json.error })
+      }
       const motivo = resp?.status === 401 ? "sessão expirada, faça login novamente" : json?.error || "erro de conexão"
-      return setEnvioDe(dependente.id, { status: "erro", mensagem: `Não foi possível salvar a foto (${motivo}).` })
+      return setEnvioDe(dependente.id, { status: "erro", mensagem: `Não foi possível enviar a foto (${motivo}).` })
     }
     handleSaveDependente({ ...dependente, ...json.dependente })
-    setEnvioDe(dependente.id, { status: "ok", mensagem: "Foto salva e enviada às catracas!" })
+    descartarPendente(dependente.id)
+    setEnvioDe(dependente.id, { status: "ok", mensagem: "Foto enviada às catracas com sucesso!" })
   }
 
   const handleSaveDependente = (updatedDependente: Dependente) => {
@@ -139,7 +151,11 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-4">
                   <Avatar className="w-20 h-20 shrink-0 ring-2 ring-[var(--accent)]">
-                    <AvatarImage src={dependente.foto_url || "/placeholder.svg"} alt={dependente.nome_completo} className="object-cover" />
+                    <AvatarImage
+                      src={pendente[dependente.id] || dependente.foto_url || "/placeholder.svg"}
+                      alt={dependente.nome_completo}
+                      className="object-cover"
+                    />
                     <AvatarFallback className="bg-[var(--secondary)] text-[var(--primary)] text-xl font-semibold">
                       {getInitials(dependente.nome_completo)}
                     </AvatarFallback>
@@ -172,34 +188,43 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                 </div>
 
                 <div className="pt-2 space-y-2">
-                  {dependente.foto_url ? (
-                    <Button
-                      className="w-full bg-[var(--primary)] text-white hover:opacity-90"
-                      onClick={() => handleEnviar(dependente.id)}
-                      disabled={envio[dependente.id]?.status === "enviando"}
-                    >
-                      {envio[dependente.id]?.status === "enviando" ? (
-                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</>
-                      ) : (
-                        <><Send className="w-4 h-4 mr-2" /> Enviar foto</>
-                      )}
-                    </Button>
+                  {dependente.foto_url || pendente[dependente.id] ? (
+                    <p className="text-xs text-[var(--muted-foreground)]">Trocar foto:</p>
                   ) : (
-                    <>
-                      <p className="text-xs text-amber-600">Sem foto. Tire ou escolha uma foto do dependente:</p>
-                      <PhotoUpload
-                        variant="buttons"
-                        userName={dependente.nome_completo}
-                        onPhotoChange={(url) => url && handleNovaFoto(dependente, url)}
-                      />
-                    </>
+                    <p className="text-xs text-amber-600">Sem foto. Tire ou escolha uma foto do dependente:</p>
                   )}
+                  <PhotoUpload
+                    variant="buttons"
+                    userName={dependente.nome_completo}
+                    onPhotoChange={(url) => url && handleNovaFoto(dependente.id, url)}
+                  />
 
-                  {!dependente.foto_url && envio[dependente.id]?.status === "enviando" && (
-                    <p className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]">
-                      <Loader2 className="w-4 h-4 shrink-0 animate-spin" /> Enviando a foto às catracas...
-                    </p>
-                  )}
+                  {(() => {
+                    const estado = envio[dependente.id]?.status
+                    const temNova = Boolean(pendente[dependente.id])
+                    if (estado === "ok" && !temNova) {
+                      return (
+                        <Button disabled className="w-full bg-green-600 text-white disabled:opacity-100">
+                          <CheckCircle2 className="w-4 h-4 mr-2" /> Foto enviada
+                        </Button>
+                      )
+                    }
+                    return (
+                      <Button
+                        className="w-full bg-[var(--primary)] text-white hover:opacity-90"
+                        onClick={() => handleEnviar(dependente)}
+                        disabled={!temNova || estado === "enviando"}
+                        title={temNova ? undefined : "Tire ou escolha uma foto nova para enviar"}
+                      >
+                        {estado === "enviando" ? (
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</>
+                        ) : (
+                          <><Send className="w-4 h-4 mr-2" /> Enviar foto</>
+                        )}
+                      </Button>
+                    )
+                  })()}
+
                   {envio[dependente.id]?.status === "ok" && (
                     <p className="flex items-center gap-1.5 text-sm text-green-700">
                       <CheckCircle2 className="w-4 h-4 shrink-0" /> {envio[dependente.id].mensagem}

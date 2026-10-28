@@ -160,6 +160,7 @@ export function PhotoUpload({
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = "" // permite escolher o mesmo arquivo de novo (ex.: após a catraca recusar)
     if (!file) return
     if (!file.type.startsWith("image/")) {
       setError("Por favor, selecione apenas arquivos de imagem")
