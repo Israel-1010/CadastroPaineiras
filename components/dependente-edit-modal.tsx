@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PhotoUpload } from "@/components/photo-upload"
-import { Save, X, Loader2 } from "lucide-react"
+import { Save, X, Loader2, Send } from "lucide-react"
 import { isValidCPF, maskCPFInput, onlyDigits } from "@/lib/cpf"
 import type { Dependente } from "@/lib/types"
 
@@ -41,11 +41,16 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
     foto_url: "",
   })
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const [isSyncingFace, setIsSyncingFace] = useState(false)
+  // Foto já gravada no banco (é a que o servidor envia às catracas)
+  const [savedFotoUrl, setSavedFotoUrl] = useState("")
 
   const isLoading = isSaving || isUploadingPhoto || isSyncingFace
+  // Botão de reenvio só faz sentido se a foto exibida já está salva
+  const canResendPhoto = Boolean(savedFotoUrl) && formData.foto_url === savedFotoUrl
 
   useEffect(() => {
     if (dependente) {
@@ -57,9 +62,45 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
         data_nascimento: toInputDate(dependente.data_nascimento),
         foto_url: dependente.foto_url || "",
       })
+      setSavedFotoUrl(dependente.foto_url || "")
       setError(null)
+      setSuccess(null)
     }
   }, [dependente])
+
+  /** Envia cartão e face da foto salva aos terminais; retorna a mensagem de erro da face, se houver */
+  const syncTerminals = async (dependenteId: string): Promise<string | null> => {
+    setIsSyncingFace(true)
+    try {
+      // Cartão de acesso (não bloqueia; servidor usa CPF e nome já salvos no banco)
+      await fetch("/api/dahua/card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dependente_id: dependenteId }),
+      }).catch(() => null)
+
+      // Face nos terminais (servidor usa CPF, nome e foto já salvos no banco)
+      const faceRes = await fetch("/api/dahua/face", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dependente_id: dependenteId }),
+      }).catch(() => null)
+      if (faceRes?.ok) return null
+      const faceJson = await faceRes?.json().catch(() => ({}))
+      return faceJson?.error || "erro de conexão"
+    } finally {
+      setIsSyncingFace(false)
+    }
+  }
+
+  const handleResendPhoto = async () => {
+    if (!dependente) return
+    setError(null)
+    setSuccess(null)
+    const faceError = await syncTerminals(dependente.id)
+    if (faceError) setError(`Não foi possível enviar a foto às catracas (${faceError}). Tente novamente.`)
+    else setSuccess("Foto enviada às catracas com sucesso.")
+  }
 
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((p) => ({ ...p, cpf: maskCPFInput(e.target.value) }))
@@ -75,18 +116,21 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
       formData.cpf &&
       formData.genero &&
       formData.dependencia &&
-      formData.data_nascimento
+      formData.data_nascimento &&
+      formData.foto_url
     )
   }, [formData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!dependente) return
+    if (!formData.foto_url) return setError("Tire a foto do dependente para continuar.")
     if (!canSubmit) return setError("Preencha os campos obrigatórios.")
     if (!isValidCPF(formData.cpf)) return setError("CPF inválido. Verifique os números digitados.")
 
     setIsSaving(true)
     setError(null)
+    setSuccess(null)
 
     try {
       // 1) Salvar dependente
@@ -108,34 +152,16 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
 
       // Os dados já estão salvos: atualiza a lista mesmo que a sincronização da face falhe
       onSave({ ...dependente, ...result.dependente })
+      setSavedFotoUrl(formData.foto_url)
 
-      // 2) Cartão de acesso (não bloqueia; servidor usa CPF e nome já salvos no banco)
-      await fetch("/api/dahua/card", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dependente_id: dependente.id }),
-      }).catch(() => null)
-
-      // 3) Face nos terminais (servidor usa CPF, nome e foto já salvos no banco)
-      if (formData.foto_url) {
-        setIsSyncingFace(true)
-        try {
-          const faceRes = await fetch("/api/dahua/face", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dependente_id: dependente.id }),
-          })
-          if (!faceRes.ok) {
-            const faceJson = await faceRes.json().catch(() => ({}))
-            setError(
-              `Dados salvos, mas a foto não foi enviada às catracas (${faceJson?.error || "erro desconhecido"}). ` +
-                "Clique em Salvar para tentar novamente.",
-            )
-            return
-          }
-        } finally {
-          setIsSyncingFace(false)
-        }
+      // 2) Cartão e face nos terminais
+      const faceError = await syncTerminals(dependente.id)
+      if (faceError) {
+        setError(
+          `Dados salvos, mas a foto não foi enviada às catracas (${faceError}). ` +
+            'Clique em "Enviar foto às catracas" para tentar novamente.',
+        )
+        return
       }
 
       onClose()
@@ -165,7 +191,27 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
               onUploadingChange={setIsUploadingPhoto} // mantém desabilitado durante upload
               userName={formData.nome_completo}
             />
-            <p className="text-xs text-gray-500">Dica: clique na foto para abrir a câmera.</p>
+            {formData.foto_url ? (
+              <p className="text-xs text-gray-500">Dica: clique na foto para abrir a câmera.</p>
+            ) : (
+              <p className="text-xs text-amber-600">Este dependente ainda não tem foto. Tire a foto para poder salvar.</p>
+            )}
+            {canResendPhoto && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleResendPhoto}
+                disabled={isLoading}
+                className="w-full"
+              >
+                {isSyncingFace ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</>
+                ) : (
+                  <><Send className="w-4 h-4 mr-2" /> Enviar foto às catracas</>
+                )}
+              </Button>
+            )}
           </div>
 
           {/* Nome */}
@@ -225,6 +271,11 @@ export function DependenteEditModal({ dependente, isOpen, onClose, onSave }: Dep
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="border-green-200 bg-green-50 text-green-800">
+              <AlertDescription>{success}</AlertDescription>
             </Alert>
           )}
 
