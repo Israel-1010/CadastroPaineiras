@@ -1,0 +1,24 @@
+# Segredos: nunca entram na imagem (passar com --env-file ao rodar)
+.env*
+!.env.example
+
+# Gerados / dependências (são recriados dentro do build)
+node_modules
+.next
+out
+*.tsbuildinfo
+
+# Controle de versão e editores
+.git
+.gitignore
+.vscode
+.idea
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Logs
+npm-debug.log*
+*.log

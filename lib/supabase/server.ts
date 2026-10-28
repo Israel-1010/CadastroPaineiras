@@ -1,17 +1,27 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-// Cliente com service role: usar SOMENTE no servidor (rotas de API).
-// Ignora RLS, então toda rota deve checar sessão/propriedade antes de usar.
-export const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
+let client: SupabaseClient | null = null
+
+function getClient() {
+  client ??= createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
+  })
+  return client
+}
+
+// Cliente com service role: usar SOMENTE no servidor (rotas de API).
+// Ignora RLS, então toda rota deve checar sessão/propriedade antes de usar.
+// Criado no primeiro uso, para o `next build` (ex.: no Docker) não exigir as variáveis de ambiente.
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const real = getClient()
+    const value = Reflect.get(real, prop, real)
+    return typeof value === "function" ? value.bind(real) : value
   },
-)
+})
 
 const PAGE_SIZE = 1000
 

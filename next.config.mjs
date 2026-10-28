@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Gera .next/standalone com só o necessário para rodar (usado no Dockerfile)
+  output: "standalone",
   eslint: {
     // ESLint não está instalado no projeto; a checagem de tipos do TypeScript continua ativa no build
     ignoreDuringBuilds: true,
