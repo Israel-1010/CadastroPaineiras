@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Award as IdCard, Users, Pencil, Send, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
-import { DependenteEditModal } from "@/components/dependente-edit-modal"
+import { Calendar, Award as IdCard, Users, Send, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { NovoDependenteModal } from "@/components/novo-dependente-modal"
 import { PhotoUpload } from "@/components/photo-upload"
 import { formatCPF } from "@/lib/cpf"
@@ -22,8 +21,6 @@ interface DependentesListProps {
 
 export function DependentesList({ dependentes: initialDependentes, colaboradorId }: DependentesListProps) {
   const [dependentes, setDependentes] = useState(initialDependentes)
-  const [selectedDependente, setSelectedDependente] = useState<Dependente | null>(null)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
   // Situação do envio às catracas, por dependente
   const [envio, setEnvio] = useState<Record<string, EstadoEnvio>>({})
@@ -57,11 +54,6 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
     if (g === "feminino") return "bg-[var(--secondary)] text-[var(--accent-foreground)] border border-[var(--border)]"
     if (g === "masculino") return "bg-[var(--secondary)] text-[var(--accent-foreground)] border border-[var(--border)]"
     return "bg-[var(--secondary)] text-[var(--accent-foreground)] border border-[var(--border)]"
-  }
-
-  const handleEditDependente = (dependente: Dependente) => {
-    setSelectedDependente(dependente)
-    setIsEditModalOpen(true)
   }
 
   const setEnvioDe = (id: string, estado: EstadoEnvio) => setEnvio((prev) => ({ ...prev, [id]: estado }))
@@ -161,18 +153,6 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                       </Badge>
                     </div>
                   </div>
-
-                  {/* Corrigir dados ou trocar a foto */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="self-start shrink-0 text-[var(--muted-foreground)] hover:bg-[var(--secondary)]"
-                    onClick={() => handleEditDependente(dependente)}
-                    title="Editar dados"
-                    aria-label="Editar dados"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Button>
                 </div>
               </CardHeader>
 
@@ -227,17 +207,6 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
           ))}
         </div>
       )}
-
-      {/* Modal de edição */}
-      <DependenteEditModal
-        dependente={selectedDependente}
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false)
-          setSelectedDependente(null)
-        }}
-        onSave={handleSaveDependente}
-      />
 
       {/* Modal de novo dependente */}
       <NovoDependenteModal
