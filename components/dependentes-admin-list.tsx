@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2, Clock3, Loader2, Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2, Clock3, Loader2, Eye, EyeOff, UserPlus } from "lucide-react"
+import { NovoDependenteAdminDialog } from "@/components/novo-dependente-admin-dialog"
 import { formatCPF, maskCPF, onlyDigits } from "@/lib/cpf"
 import { DEPENDENCIA_LABEL, DEPENDENCIAS, dependenciaLabel, normalizeDependencia } from "@/lib/types"
 
@@ -41,6 +42,8 @@ export function DependentesAdminList() {
   const [updatingPresencaId, setUpdatingPresencaId] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showCPF, setShowCPF] = useState(false)
+  const [novoAberto, setNovoAberto] = useState(false)
+  const [mensagem, setMensagem] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -187,7 +190,7 @@ export function DependentesAdminList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Button
           variant="outline"
           onClick={() => router.push("/admin/dashboard")}
@@ -196,9 +199,28 @@ export function DependentesAdminList() {
           <ArrowLeft className="w-4 h-4" />
           <span>Voltar ao Dashboard</span>
         </Button>
+        <Button onClick={() => setNovoAberto(true)} className="bg-pink-600 hover:bg-pink-700 text-white">
+          <UserPlus className="w-4 h-4 mr-2" /> Novo dependente
+        </Button>
       </div>
 
       {loadError && <p className="text-sm text-red-700">{loadError}</p>}
+      {mensagem && (
+        <p className="flex items-center gap-1.5 text-sm text-green-700">
+          <CheckCircle2 className="w-4 h-4" /> {mensagem}
+        </p>
+      )}
+
+      <NovoDependenteAdminDialog
+        open={novoAberto}
+        onOpenChange={setNovoAberto}
+        onCreated={(novo: Dependente) => {
+          setDependentes((prev) =>
+            [...prev, novo].sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, "pt-BR")),
+          )
+          setMensagem(`${novo.nome_completo} cadastrado(a) para ${novo.colaborador?.nome_completo ?? "o colaborador"}.`)
+        }}
+      />
 
       {/* Filtros */}
       <Card className="bg-white border-slate-200">
