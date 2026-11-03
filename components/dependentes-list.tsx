@@ -206,7 +206,19 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
 
                   {(() => {
                     const estado = envio[dependente.id]?.status
-                    // Sempre pode enviar (ou reenviar) a foto nova ou a já salva, mesmo que já tenha sido aceita
+                    // Enviada pelo próprio colaborador e aceita: botão verde até ele trocar a foto
+                    if (
+                      !pendente[dependente.id] &&
+                      dependente.foto_aceita === true &&
+                      dependente.foto_enviada_por === "colaborador"
+                    ) {
+                      return (
+                        <Button disabled className="w-full bg-green-600 text-white disabled:opacity-100">
+                          <CheckCircle2 className="w-4 h-4 mr-2" /> Foto enviada
+                        </Button>
+                      )
+                    }
+                    // Foto nova ou já salva (inclusive enviada pela carga do admin): pode enviar
                     const podeEnviar = Boolean(pendente[dependente.id] || dependente.foto_url)
                     return (
                       <Button
