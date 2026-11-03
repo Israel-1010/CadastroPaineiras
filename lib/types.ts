@@ -58,6 +58,8 @@ export interface Dependente {
   /** null = foto nunca enviada às catracas; true = facial aceitou; false = recusou */
   foto_aceita?: boolean | null
   foto_enviada_em?: string | null
+  /** "colaborador" quando o último envio foi feito pelo próprio colaborador; a carga do admin não preenche */
+  foto_enviada_por?: string | null
 }
 
 export interface Admin {

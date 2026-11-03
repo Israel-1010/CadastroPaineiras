@@ -20,7 +20,7 @@ export async function GET() {
 
     const { data: dependentes, error: dependentesError } = await supabaseAdmin
       .from("dependentes")
-      .select("id, nome_completo, cpf, genero, dependencia, data_nascimento, foto_url, colaborador_id, foto_aceita, foto_enviada_em")
+      .select("id, nome_completo, cpf, genero, dependencia, data_nascimento, foto_url, colaborador_id, foto_aceita, foto_enviada_em, foto_enviada_por")
       .eq("colaborador_id", colaborador.id)
       .order("nome_completo")
 

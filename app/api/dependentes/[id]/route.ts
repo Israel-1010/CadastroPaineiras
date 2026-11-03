@@ -7,7 +7,7 @@ import { deleteObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
 export const runtime = "nodejs"
 
 const DEPENDENTE_COLUMNS =
-  "id, nome_completo, cpf, genero, dependencia, data_nascimento, foto_url, colaborador_id, foto_aceita, foto_enviada_em"
+  "id, nome_completo, cpf, genero, dependencia, data_nascimento, foto_url, colaborador_id, foto_aceita, foto_enviada_em, foto_enviada_por"
 
 const MSG_RECUSADA =
   "A catraca não aceitou esta foto (o rosto precisa estar de frente, bem iluminado e sem óculos escuros ou boné). Tire outra foto."
@@ -71,7 +71,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     // O facial recusou (e a face anterior já foi removida dos terminais)
     if (resultado === "recusada") {
       if (novaFoto) await deleteObject(key)
-      const { data } = await registrar({ foto_aceita: false, foto_enviada_em: new Date().toISOString() })
+      const { data } = await registrar({
+        foto_aceita: false,
+        foto_enviada_em: new Date().toISOString(),
+        foto_enviada_por: "colaborador",
+      })
       return NextResponse.json({ error: MSG_RECUSADA, descartada: novaFoto, dependente: data }, { status: 422 })
     }
 
@@ -79,6 +83,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       foto_url: fotoUrl,
       foto_aceita: true,
       foto_enviada_em: new Date().toISOString(),
+      foto_enviada_por: "colaborador",
     })
     if (error) throw new Error(error.message)
     if (!data) return NextResponse.json({ error: "Dependente não encontrado" }, { status: 404 })

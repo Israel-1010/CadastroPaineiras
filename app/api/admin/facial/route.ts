@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
 
       if (resultado === "aceita" || resultado === "recusada") {
         const agora = new Date().toISOString()
+        // foto_enviada_por fica intacto: o aviso de sucesso no cartão é só para envio feito pelo colaborador
         const { error: updError } = await supabaseAdmin
           .from("dependentes")
           .update({ foto_aceita: resultado === "aceita", foto_enviada_em: agora, updated_at: agora })

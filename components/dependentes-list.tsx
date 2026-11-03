@@ -33,6 +33,12 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
   return `${d}/${mo}/${y}` // pt-BR, sem timezone
 }
 
+  const formatDateTime = (iso: string) => {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ""
+    return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  }
+
   const getInitials = (name: string) =>
     name
       .trim()
@@ -200,16 +206,8 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
 
                   {(() => {
                     const estado = envio[dependente.id]?.status
-                    const temNova = Boolean(pendente[dependente.id])
-                    // Foto salva ainda não aceita pelo facial (nunca enviada ou recusada): pode (re)enviar
-                    const podeEnviar = temNova || (Boolean(dependente.foto_url) && dependente.foto_aceita !== true)
-                    if (!temNova && dependente.foto_aceita === true) {
-                      return (
-                        <Button disabled className="w-full bg-green-600 text-white disabled:opacity-100">
-                          <CheckCircle2 className="w-4 h-4 mr-2" /> Foto enviada
-                        </Button>
-                      )
-                    }
+                    // Sempre pode enviar (ou reenviar) a foto nova ou a já salva, mesmo que já tenha sido aceita
+                    const podeEnviar = Boolean(pendente[dependente.id] || dependente.foto_url)
                     return (
                       <Button
                         className="w-full bg-[var(--primary)] text-white hover:opacity-90"
@@ -226,10 +224,21 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                     )
                   })()}
 
-                  {/* Recusa registrada em envio anterior (some quando há resultado novo nesta tela) */}
+                  {/* Sucesso só quando o próprio colaborador enviou (a carga do admin não mostra aviso);
+                      some quando há resultado novo nesta tela */}
+                  {!envio[dependente.id] &&
+                    !pendente[dependente.id] &&
+                    dependente.foto_aceita === true &&
+                    dependente.foto_enviada_por === "colaborador" && (
+                    <p className="flex items-center gap-1.5 text-sm text-green-700">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" /> Foto enviada às catracas
+                      {dependente.foto_enviada_em ? ` em ${formatDateTime(dependente.foto_enviada_em)}` : ""}
+                    </p>
+                  )}
                   {!envio[dependente.id] && !pendente[dependente.id] && dependente.foto_aceita === false && (
                     <p className="flex items-start gap-1.5 text-sm text-red-600">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> A catraca recusou a última foto. Tire outra foto.
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> A catraca recusou o último envio. Envie de novo ou
+                      tire outra foto.
                     </p>
                   )}
                   {envio[dependente.id]?.status === "ok" && (
