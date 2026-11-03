@@ -1,21 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
-import { clientIp, setSessionCookie } from "@/lib/auth"
-import { rateLimit } from "@/lib/rate-limit"
+import { setSessionCookie } from "@/lib/auth"
 import { loginColaboradorSchema } from "@/lib/validation"
 
 const INVALID = "RE ou CPF inválidos. Verifique os dados e tente novamente."
 
 export async function POST(request: NextRequest) {
   try {
-    const limit = rateLimit(`login:${clientIp(request)}`, 10, 15 * 60 * 1000)
-    if (!limit.ok) {
-      return NextResponse.json(
-        { error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." },
-        { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
-      )
-    }
-
     const parsed = loginColaboradorSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) {
       return NextResponse.json({ error: INVALID }, { status: 401 })

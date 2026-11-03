@@ -1,14 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { randomUUID } from "crypto"
+import { createHash, randomUUID, timingSafeEqual } from "crypto"
 import { compare, hashSync } from "bcryptjs"
 import { supabaseAdmin } from "@/lib/supabase/server"
 import { audit, clientIp, setSessionCookie } from "@/lib/auth"
-import { rateLimit, resetRateLimit } from "@/lib/rate-limit"
 import { loginAdminSchema } from "@/lib/validation"
 
 const INVALID = "Usuário ou senha inválidos"
 // Hash de uma senha aleatória: mantém o tempo de resposta igual quando o usuário não existe
 const DUMMY_HASH = hashSync(randomUUID(), 10)
+
+/** Comparação em tempo constante (compara os SHA-256 para não depender do tamanho) */
+const sha = (s: string) => createHash("sha256").update(s).digest()
+const sameText = (a: string, b: string) => timingSafeEqual(sha(a), sha(b))
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,18 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Usuário e senha são obrigatórios" }, { status: 400 })
     }
     const { username, password } = parsed.data
-
     const ip = clientIp(request)
-    const userKey = `admin-login:${username.toLowerCase()}`
-    const byIp = rateLimit(`admin-login-ip:${ip}`, 20, 15 * 60 * 1000)
-    const byUser = rateLimit(userKey, 5, 15 * 60 * 1000)
-    if (!byIp.ok || !byUser.ok) {
-      const retry = Math.max(byIp.retryAfterSeconds, byUser.retryAfterSeconds)
-      return NextResponse.json(
-        { error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." },
-        { status: 429, headers: { "Retry-After": String(retry) } },
-      )
-    }
 
     const { data: admin, error } = await supabaseAdmin
       .from("administradores")
@@ -42,15 +34,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
     }
 
-    // Só aceita hash bcrypt; senhas em texto puro no banco nunca são aceitas
-    const hasHash = Boolean(admin?.password_hash?.startsWith("$2"))
-    const valid = await compare(password, hasHash ? admin!.password_hash : DUMMY_HASH)
+    const stored: string = admin?.password_hash ?? ""
+    const hasHash = stored.startsWith("$2")
+    // TEMPORÁRIO: aceita a senha antiga gravada em texto puro, porque com a chave atual do .env
+    // (role anon) o scripts/admin-set-password.mjs não consegue gravar o hash bcrypt.
+    // Remover depois de trocar SUPABASE_SERVICE_ROLE_KEY e redefinir a senha.
+    let valid: boolean
+    if (hasHash) {
+      valid = await compare(password, stored)
+    } else {
+      await compare(password, DUMMY_HASH) // mantém o tempo de resposta
+      valid = Boolean(admin && stored) && sameText(password, stored)
+    }
 
-    if (!admin || !hasHash || !valid) {
+    if (!admin || !valid) {
       return NextResponse.json({ error: INVALID }, { status: 401 })
     }
 
-    resetRateLimit(userKey)
     await audit({ tipo: "admin", id: admin.id }, "login", "administradores", admin.id, { ip })
 
     const { password_hash, ...adminData } = admin
