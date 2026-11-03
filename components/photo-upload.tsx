@@ -9,6 +9,23 @@ import { Camera, X, Loader2, Upload, Video, RotateCcw, ImageIcon } from "lucide-
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
+// Brilho médio (0–255) abaixo disso é um quadro praticamente preto
+const BRILHO_MINIMO = 12
+
+/** Brilho médio de uma amostra 32x32 do quadro atual do vídeo */
+function brilhoMedio(video: HTMLVideoElement) {
+  const c = document.createElement("canvas")
+  c.width = 32
+  c.height = 32
+  const ctx = c.getContext("2d")
+  if (!ctx) return 255
+  ctx.drawImage(video, 0, 0, 32, 32)
+  const { data } = ctx.getImageData(0, 0, 32, 32)
+  let soma = 0
+  for (let i = 0; i < data.length; i += 4) soma += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+  return soma / (data.length / 4)
+}
+
 interface PhotoUploadProps {
   currentPhotoUrl?: string
   onPhotoChange: (photoUrl: string) => void
@@ -31,6 +48,7 @@ export function PhotoUpload({
   const [showCameraModal, setShowCameraModal] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
+  const [avisoCamera, setAvisoCamera] = useState<string | null>(null)
   // Abre na câmera traseira (no computador, sem traseira, o navegador usa a webcam)
   const [facingMode, setFacingMode] = useState<"user" | "environment">("environment")
 
@@ -134,6 +152,7 @@ export function PhotoUpload({
     }
     setShowCameraModal(false)
     setCapturedPhoto(null)
+    setAvisoCamera(null)
     setFacingMode("environment")
   }
 
@@ -141,6 +160,12 @@ export function PhotoUpload({
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current
       const canvas = canvasRef.current
+      // Quadro preto (câmera ainda sem imagem) gera foto que a catraca recusa: não deixa capturar
+      if (!video.videoWidth || brilhoMedio(video) < BRILHO_MINIMO) {
+        setAvisoCamera("A câmera ainda não está mostrando a imagem. Aguarde aparecer e tire a foto de novo.")
+        return
+      }
+      setAvisoCamera(null)
       const ctx = canvas.getContext("2d")
       if (ctx) {
         canvas.width = video.videoWidth
@@ -317,6 +342,11 @@ export function PhotoUpload({
                     <Camera className="w-6 h-6" />
                   </Button>
                 </div>
+                {avisoCamera && (
+                  <Alert variant="destructive" className="mt-3">
+                    <AlertDescription>{avisoCamera}</AlertDescription>
+                  </Alert>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
