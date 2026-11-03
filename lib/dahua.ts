@@ -10,6 +10,12 @@ const TIMEOUT_MS = 8000
 
 const md5 = (s: string) => crypto.createHash("md5").update(s).digest("hex")
 
+// Os terminais recusam nomes com mais de 32 caracteres. No cartão isso impede a criação do usuário,
+// e a face enviada em seguida volta "Bad Request". Cartão e face usam sempre o mesmo nome cortado.
+const NOME_MAX = 32
+const nomeTerminal = (nomeCompleto: string) =>
+  nomeCompleto.replace(/\+/g, " ").replace(/\s+/g, " ").trim().slice(0, NOME_MAX).trimEnd()
+
 function config() {
   const user = process.env.DAHUA_USER
   const pass = process.env.DAHUA_PASS
@@ -185,7 +191,7 @@ async function removeAndAddOnIp(ip: string, cpf: string, userName: string, jpgB6
 /** Cadastra/atualiza a face em todos os terminais. Retorna resultado por IP. */
 export async function syncFace(cpf: string, nomeCompleto: string, photo: Buffer) {
   const { user, pass, ips } = config()
-  const userName = nomeCompleto.replace(/\+/g, " ").trim().slice(0, 32)
+  const userName = nomeTerminal(nomeCompleto)
   const b64 = (await compressToUnder200KB(photo)).toString("base64")
   const results = await Promise.allSettled(ips.map((ip) => removeAndAddOnIp(ip, cpf, userName, b64, user, pass)))
   const perIp = results.map((r, i) =>
@@ -255,7 +261,7 @@ async function upsertCardOnIp(ip: string, cpf: string, nome: string, user: strin
 /** Cadastra/atualiza o cartão de acesso (CardNo = UserID = CPF) em todos os terminais */
 export async function upsertCard(cpf: string, nomeCompleto: string) {
   const { user, pass, ips } = config()
-  const nome = nomeCompleto.replace(/\+/g, " ").trim()
+  const nome = nomeTerminal(nomeCompleto)
   const results = await Promise.allSettled(ips.map((ip) => upsertCardOnIp(ip, cpf, nome, user, pass)))
   const perIp = results.map((r, i) =>
     r.status === "fulfilled" ? r.value : { ip: ips[i], ok: false, error: (r.reason as Error)?.message || "erro" },

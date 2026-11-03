@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { ArrowLeft, Loader2, ScanFace, Square, CheckCircle2, AlertCircle } from "lucide-react"
 
-type Modo = "pendentes" | "todas"
+type Modo = "pendentes" | "recusadas" | "todas"
 type Resultado = "aceita" | "recusada" | "sem_conexao" | "erro_foto" | "sem_foto" | "nao_encontrado"
 type ItemFila = { id: string; nome_completo: string; colaborador: string | null }
 type Resumo = {
@@ -202,6 +202,13 @@ export function CargaFacial() {
               </Label>
             </div>
             <div className="flex items-start gap-3">
+              <RadioGroupItem value="recusadas" id="modo-recusadas" className="mt-1" />
+              <Label htmlFor="modo-recusadas" className="font-normal leading-snug cursor-pointer">
+                <span className="font-medium">Tentar de novo as recusadas</span>
+                <span className="block text-sm text-slate-500">Reenvia as fotos que o facial recusou na última tentativa.</span>
+              </Label>
+            </div>
+            <div className="flex items-start gap-3">
               <RadioGroupItem value="todas" id="modo-todas" className="mt-1" />
               <Label htmlFor="modo-todas" className="font-normal leading-snug cursor-pointer">
                 <span className="font-medium">Todas as fotos (recarga completa)</span>
@@ -306,7 +313,9 @@ export function CargaFacial() {
             <AlertDialogDescription>
               {modo === "todas"
                 ? "Cada face é removida e cadastrada de novo nas catracas. "
-                : "As fotos ainda não enviadas serão cadastradas nas catracas. "}
+                : modo === "recusadas"
+                  ? "As fotos recusadas na última tentativa serão enviadas de novo às catracas. "
+                  : "As fotos ainda não enviadas serão cadastradas nas catracas. "}
               Pode levar alguns minutos; mantenha esta página aberta até terminar.
             </AlertDialogDescription>
           </AlertDialogHeader>

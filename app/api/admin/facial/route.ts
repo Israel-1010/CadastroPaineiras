@@ -19,14 +19,18 @@ type Linha = {
   colaborador: { nome_completo: string; re: string } | null
 }
 
+const MODOS = ["pendentes", "recusadas", "todas"] as const
+type Modo = (typeof MODOS)[number]
+
 /**
  * Resumo da situação das fotos e fila da carga.
- * ?modo=pendentes (padrão): fotos nunca enviadas | ?modo=todas: todas as fotos (recarga completa)
+ * ?modo=pendentes (padrão): nunca enviadas | recusadas: recusadas pelo facial | todas: recarga completa
  */
 export async function GET(request: NextRequest) {
   try {
     if (!(await getAdmin())) return unauthorized()
-    const modo = request.nextUrl.searchParams.get("modo") === "todas" ? "todas" : "pendentes"
+    const param = request.nextUrl.searchParams.get("modo") as Modo
+    const modo: Modo = MODOS.includes(param) ? param : "pendentes"
 
     const linhas = await fetchAll<Linha>((from, to) =>
       supabaseAdmin
@@ -46,7 +50,12 @@ export async function GET(request: NextRequest) {
       recusadas: comFoto.filter((d) => d.foto_aceita === false).length,
       nuncaEnviadas: comFoto.filter((d) => d.foto_aceita == null).length,
     }
-    const fila = (modo === "todas" ? comFoto : comFoto.filter((d) => d.foto_aceita == null)).map((d) => ({
+    const naFila = {
+      pendentes: (d: Linha) => d.foto_aceita == null,
+      recusadas: (d: Linha) => d.foto_aceita === false,
+      todas: () => true,
+    }[modo]
+    const fila = comFoto.filter(naFila).map((d) => ({
       id: d.id,
       nome_completo: d.nome_completo,
       colaborador: d.colaborador ? `${d.colaborador.nome_completo} (RE ${d.colaborador.re})` : null,
