@@ -249,8 +249,11 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                   )}
                   {!envio[dependente.id] && !pendente[dependente.id] && dependente.foto_aceita === false && (
                     <p className="flex items-start gap-1.5 text-sm text-red-600">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> A catraca recusou o último envio. Envie de novo ou
-                      tire outra foto.
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      {/* Sem foto salva (a primeira foto foi recusada): não há o que reenviar */}
+                      {dependente.foto_url
+                        ? "A catraca recusou o último envio. Envie de novo ou tire outra foto."
+                        : "A catraca recusou a foto enviada. Tire outra foto."}
                     </p>
                   )}
                   {envio[dependente.id]?.status === "ok" && (
