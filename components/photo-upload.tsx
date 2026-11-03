@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Camera, X, Loader2, Upload, Video, RotateCcw, ImageIcon } from "lucide-react"
@@ -31,11 +31,27 @@ export function PhotoUpload({
   const [showCameraModal, setShowCameraModal] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
-  const [facingMode, setFacingMode] = useState<"user" | "environment">("user")
+  // Abre na câmera traseira (no computador, sem traseira, o navegador usa a webcam)
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("environment")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  streamRef.current = stream
+
+  const ligarVideo = (video: HTMLVideoElement, s: MediaStream) => {
+    if (video.srcObject === s) return
+    video.srcObject = s
+    video.play().catch(() => {})
+  }
+
+  // Callback ref: o Dialog monta o <video> só depois de abrir (e de novo no "Tirar Novamente").
+  // Ligar o stream aqui garante a imagem logo na primeira abertura, sem depender da ordem dos efeitos.
+  const videoCallbackRef = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el
+    if (el && streamRef.current) ligarVideo(el, streamRef.current)
+  }, [])
 
   const getInitials = (name: string) =>
     name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -45,16 +61,12 @@ export function PhotoUpload({
     onUploadingChange?.(v)
   }
 
-  // O <video> só existe depois que o modal abre: liga o stream quando ambos estiverem prontos
+  // Troca de câmera com o <video> já na tela: liga o stream novo
   useEffect(() => {
-    if (showCameraModal && !capturedPhoto && videoRef.current && stream) {
-      videoRef.current.srcObject = stream
-    }
-  }, [showCameraModal, capturedPhoto, stream])
+    if (videoRef.current && stream) ligarVideo(videoRef.current, stream)
+  }, [stream])
 
   // Desliga a câmera se o componente for desmontado com ela aberta
-  const streamRef = useRef<MediaStream | null>(null)
-  streamRef.current = stream
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), [])
 
   /** Envia a imagem crua; o servidor gera o nome do arquivo e devolve a URL */
@@ -122,7 +134,7 @@ export function PhotoUpload({
     }
     setShowCameraModal(false)
     setCapturedPhoto(null)
-    setFacingMode("user")
+    setFacingMode("environment")
   }
 
   const capturePhoto = () => {
@@ -293,7 +305,8 @@ export function PhotoUpload({
             {!capturedPhoto ? (
               <div className="relative">
                 <video
-                  ref={videoRef}
+                  ref={videoCallbackRef}
+                  muted
                   autoPlay
                   playsInline
                   className="w-full h-auto rounded-lg bg-gray-100"
