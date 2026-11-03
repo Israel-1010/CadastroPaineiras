@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
 import { audit, getColaboradorId, unauthorized } from "@/lib/auth"
-import { syncFace, upsertCard } from "@/lib/dahua"
-import { deleteObject, getObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
+import { enviarFaceDependente } from "@/lib/facial"
+import { deleteObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
 
 export const runtime = "nodejs"
 
@@ -55,34 +55,21 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         .select(DEPENDENTE_COLUMNS)
         .maybeSingle()
 
-    // Cartão de acesso (não bloqueia) e face nos terminais
-    await upsertCard(dependente.cpf, dependente.nome_completo).catch((err) =>
-      console.warn("[dependentes] cartão não enviado:", (err as Error).message),
-    )
-    let face: Awaited<ReturnType<typeof syncFace>>
-    try {
-      face = await syncFace(dependente.cpf, dependente.nome_completo, await getObject(key))
-    } catch (err) {
-      const msg = (err as Error).message
-      console.warn("[dependentes] foto não enviada:", msg)
-      if (msg.includes("não configurada")) {
-        return NextResponse.json({ error: MSG_SEM_CONEXAO, descartada: false }, { status: 503 })
-      }
+    const resultado = await enviarFaceDependente(dependente, key)
+
+    // Nenhum terminal respondeu: problema de rede, não da foto
+    if (resultado === "sem_conexao") {
+      return NextResponse.json({ error: MSG_SEM_CONEXAO, descartada: false }, { status: 503 })
+    }
+    if (resultado === "erro_foto") {
       if (novaFoto) await deleteObject(key)
       return NextResponse.json(
         { error: "Não foi possível processar esta foto. Tire outra foto e tente de novo.", descartada: novaFoto },
         { status: 502 },
       )
     }
-
-    if (!face.ok) {
-      // Nenhum terminal respondeu: problema de rede, não da foto
-      if (face.results.every((r) => "error" in r)) {
-        console.warn("[dependentes] catracas inacessíveis:", JSON.stringify(face.results))
-        return NextResponse.json({ error: MSG_SEM_CONEXAO, descartada: false }, { status: 503 })
-      }
-      // O facial recusou (e a face anterior já foi removida dos terminais)
-      console.warn("[dependentes] facial recusou a foto:", JSON.stringify(face.results))
+    // O facial recusou (e a face anterior já foi removida dos terminais)
+    if (resultado === "recusada") {
       if (novaFoto) await deleteObject(key)
       const { data } = await registrar({ foto_aceita: false, foto_enviada_em: new Date().toISOString() })
       return NextResponse.json({ error: MSG_RECUSADA, descartada: novaFoto, dependente: data }, { status: 422 })

@@ -44,6 +44,13 @@ export function AdminNavigation() {
       action: () => router.push("/admin/dependentes"),
     },
     {
+      title: "Carga no Facial",
+      description: "Enviar às catracas as fotos dos dependentes",
+      icon: "📷",
+      color: "bg-rose-50 border-rose-200",
+      action: () => router.push("/admin/facial"),
+    },
+    {
       title: "Relatórios",
       description: "Visualizar relatórios e estatísticas",
       icon: "📈",
