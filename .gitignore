@@ -26,3 +26,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Planilhas de carga (contêm CPFs): nunca versionar
+*.xlsx
+*.xls
+*.csv
