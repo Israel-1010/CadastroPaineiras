@@ -30,3 +30,6 @@ next-env.d.ts
 *.xlsx
 *.xls
 *.csv
+
+# Backups do banco (dados pessoais)
+backup-banco/
