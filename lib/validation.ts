@@ -39,7 +39,15 @@ export const colaboradorSchema = z.object({
   re: z.string().trim().regex(/^\d{1,20}$/, "RE deve conter apenas números"),
   cpf: cpfSchema,
   nome_completo: nome,
-  email: z.string().trim().toLowerCase().email("Email inválido").max(255),
+  // Opcional: a maioria dos colaboradores não tem e-mail cadastrado. Vazio vira null.
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(255)
+    .refine((v) => v === "" || z.string().email().safeParse(v).success, "Email inválido")
+    .optional()
+    .transform((v) => v || null),
 })
 
 export const loginColaboradorSchema = z.object({

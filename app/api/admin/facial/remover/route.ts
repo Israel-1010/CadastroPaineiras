@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
-import { audit, getAdmin, unauthorized } from "@/lib/auth"
+import { audit, exigirAdmin } from "@/lib/auth"
 import { onlyDigits } from "@/lib/cpf"
 import { removerDasCatracas, type RemocaoTerminal } from "@/lib/dahua"
 
@@ -24,8 +24,9 @@ const normalizaCpf = (v: unknown) => {
  */
 export async function POST(request: NextRequest) {
   try {
-    const admin = await getAdmin()
-    if (!admin) return unauthorized()
+    const auth = await exigirAdmin("facial")
+    if ("resposta" in auth) return auth.resposta
+    const { admin } = auth
 
     const body = await request.json().catch(() => ({}))
     const cpfs: string[] = Array.isArray(body?.cpfs) ? [...new Set<string>(body.cpfs.map(normalizaCpf))].filter(Boolean) : []

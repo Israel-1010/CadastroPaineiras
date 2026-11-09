@@ -72,7 +72,7 @@ export function AdminDashboardClient() {
         </div>
 
         <AdminStats stats={stats} />
-        <AdminNavigation />
+        <AdminNavigation perfil={admin.perfil} />
       </div>
     </div>
   )

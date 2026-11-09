@@ -3,16 +3,25 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
+import { pode, type Perfil, type Permissao } from "@/lib/permissoes"
 
-export function AdminNavigation() {
+export function AdminNavigation({ perfil }: { perfil: Perfil }) {
   const router = useRouter()
 
-  const navigationItems = [
+  const navigationItems: Array<{
+    title: string
+    description: string
+    icon: string
+    color: string
+    permissao: Permissao
+    action: () => void
+  }> = [
     {
       title: "Cadastrar Colaborador",
       description: "Adicionar novo colaborador manualmente",
       icon: "👤➕",
       color: "bg-blue-50 border-blue-200",
+      permissao: "cadastro",
       action: () => router.push("/admin/colaboradores/novo"),
     },
     {
@@ -20,6 +29,7 @@ export function AdminNavigation() {
       description: "Visualizar e editar colaboradores existentes",
       icon: "👥",
       color: "bg-green-50 border-green-200",
+      permissao: "cadastro",
       action: () => router.push("/admin/colaboradores"),
     },
     {
@@ -27,6 +37,7 @@ export function AdminNavigation() {
       description: "Importar colaboradores via arquivo Excel",
       icon: "📊",
       color: "bg-purple-50 border-purple-200",
+      permissao: "cadastro",
       action: () => router.push("/admin/upload"),
     },
     {
@@ -34,6 +45,7 @@ export function AdminNavigation() {
       description: "Importar dependentes via arquivo Excel",
       icon: "👶📊",
       color: "bg-orange-50 border-orange-200",
+      permissao: "cadastro",
       action: () => router.push("/admin/upload-dependentes"),
     },
     {
@@ -41,6 +53,7 @@ export function AdminNavigation() {
       description: "Visualizar e gerenciar todos os dependentes",
       icon: "👶",
       color: "bg-pink-50 border-pink-200",
+      permissao: "cadastro",
       action: () => router.push("/admin/dependentes"),
     },
     {
@@ -48,6 +61,7 @@ export function AdminNavigation() {
       description: "Enviar às catracas as fotos dos dependentes",
       icon: "📷",
       color: "bg-rose-50 border-rose-200",
+      permissao: "facial",
       action: () => router.push("/admin/facial"),
     },
     {
@@ -55,6 +69,7 @@ export function AdminNavigation() {
       description: "Visualizar relatórios e estatísticas",
       icon: "📈",
       color: "bg-indigo-50 border-indigo-200",
+      permissao: "relatorios",
       action: () => router.push("/admin/relatorios"),
     },
     {
@@ -62,13 +77,14 @@ export function AdminNavigation() {
       description: "Configurações do sistema",
       icon: "⚙️",
       color: "bg-slate-50 border-slate-200",
+      permissao: "sistema",
       action: () => router.push("/admin/configuracoes"),
     },
   ]
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {navigationItems.map((item, index) => (
+      {navigationItems.filter((item) => pode(perfil, item.permissao)).map((item, index) => (
         <Card key={index} className={`${item.color} hover:shadow-md transition-shadow cursor-pointer`}>
           <CardHeader className="pb-3">
             <div className="flex items-center space-x-3">

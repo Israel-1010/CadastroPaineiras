@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { fetchAll, isUniqueViolation, supabaseAdmin } from "@/lib/supabase/server"
-import { audit, getAdmin, unauthorized } from "@/lib/auth"
+import { audit, exigirAdmin } from "@/lib/auth"
 import { colaboradorSchema, firstIssue } from "@/lib/validation"
 
 export const dynamic = "force-dynamic"
@@ -10,8 +10,9 @@ const duplicateField = (column = "") => DUPLICATE_LABEL[column] ?? "Registro"
 
 export async function POST(request: NextRequest) {
   try {
-    const admin = await getAdmin()
-    if (!admin) return unauthorized()
+    const auth = await exigirAdmin("cadastro")
+    if ("resposta" in auth) return auth.resposta
+    const { admin } = auth
 
     const parsed = colaboradorSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsed.success) return NextResponse.json({ error: firstIssue(parsed.error) }, { status: 400 })
@@ -39,7 +40,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    if (!(await getAdmin())) return unauthorized()
+    const auth = await exigirAdmin("cadastro")
+    if ("resposta" in auth) return auth.resposta
 
     const colaboradores = await fetchAll((from, to) =>
       supabaseAdmin

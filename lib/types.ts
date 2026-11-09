@@ -1,3 +1,5 @@
+import type { Perfil } from "@/lib/permissoes"
+
 export const GENEROS = ["Masculino", "Feminino"] as const
 // Valores como estão gravados no banco (sem acento); DEPENDENCIA_LABEL é só para exibir
 export const DEPENDENCIAS = [
@@ -83,6 +85,7 @@ export interface Admin {
   nome_completo: string
   email: string
   ativo: boolean
+  perfil: Perfil
 }
 
 export interface ImportResult {

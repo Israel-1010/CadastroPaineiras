@@ -9,6 +9,7 @@ import {
   type SessionRole,
 } from "@/lib/session"
 import type { Admin } from "@/lib/types"
+import { MSG_SEM_PERMISSAO, perfilDe, pode, type Permissao } from "@/lib/permissoes"
 
 export async function getSessionId(role: SessionRole) {
   const token = cookies().get(SESSION_COOKIE[role])?.value
@@ -25,13 +26,28 @@ export const getColaboradorId = () => getSessionId("colaborador")
 export async function getAdmin(): Promise<Admin | null> {
   const id = await getSessionId("admin")
   if (!id) return null
-  const { data } = await supabaseAdmin
-    .from("administradores")
-    .select("id, username, nome_completo, email, ativo")
-    .eq("id", id)
-    .eq("ativo", true)
-    .maybeSingle()
-  return data
+  // select("*"): funciona com ou sem a coluna perfil (009_perfil_rh.sql)
+  const { data } = await supabaseAdmin.from("administradores").select("*").eq("id", id).eq("ativo", true).maybeSingle()
+  if (!data) return null
+  return {
+    id: data.id,
+    username: data.username,
+    nome_completo: data.nome_completo,
+    email: data.email,
+    ativo: data.ativo,
+    perfil: perfilDe(data.perfil),
+  }
+}
+
+/**
+ * Admin logado com a permissão pedida. Uso:
+ *   const auth = await exigirAdmin("facial"); if ("resposta" in auth) return auth.resposta
+ */
+export async function exigirAdmin(permissao: Permissao): Promise<{ admin: Admin } | { resposta: NextResponse }> {
+  const admin = await getAdmin()
+  if (!admin) return { resposta: unauthorized() }
+  if (!pode(admin.perfil, permissao)) return { resposta: NextResponse.json({ error: MSG_SEM_PERMISSAO }, { status: 403 }) }
+  return { admin }
 }
 
 export async function setSessionCookie(req: Request, res: NextResponse, role: SessionRole, id: string) {

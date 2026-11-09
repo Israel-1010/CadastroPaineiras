@@ -1,13 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
-import { audit, getAdmin, unauthorized } from "@/lib/auth"
+import { audit, exigirAdmin } from "@/lib/auth"
 import { chunk, normalizeCpfCell, readImportFile } from "@/lib/planilha"
 import { colaboradorSchema, firstIssue } from "@/lib/validation"
 import type { ImportResult } from "@/lib/types"
 
 export const runtime = "nodejs"
 
-type Linha = { row: number; re: string; cpf: string; nome_completo: string; email: string }
+type Linha = { row: number; re: string; cpf: string; nome_completo: string; email: string | null }
 
 async function existentes(coluna: "re" | "cpf" | "email", valores: string[]) {
   const set = new Set<string>()
@@ -19,11 +19,12 @@ async function existentes(coluna: "re" | "cpf" | "email", valores: string[]) {
   return set
 }
 
-// Colunas: RE, CPF, Nome Completo, Email
+// Colunas: RE, CPF, Nome Completo, Email (opcional)
 export async function POST(request: NextRequest) {
   try {
-    const admin = await getAdmin()
-    if (!admin) return unauthorized()
+    const auth = await exigirAdmin("cadastro")
+    if ("resposta" in auth) return auth.resposta
+    const { admin } = auth
 
     let rows
     try {
@@ -44,13 +45,13 @@ export async function POST(request: NextRequest) {
         continue
       }
       const linha = { row, ...parsed.data }
-      // Duplicadas dentro do próprio arquivo
-      const repetido = (["re", "cpf", "email"] as const).find((c) => vistos[c].has(linha[c].toLowerCase()))
+      // Duplicadas dentro do próprio arquivo (e-mail vazio não conta: é opcional)
+      const repetido = (["re", "cpf", "email"] as const).find((c) => linha[c] && vistos[c].has(linha[c]!.toLowerCase()))
       if (repetido) {
-        result.duplicates.push({ row, field: `${repetido.toUpperCase()} (repetido no arquivo)`, value: linha[repetido] })
+        result.duplicates.push({ row, field: `${repetido.toUpperCase()} (repetido no arquivo)`, value: linha[repetido]! })
         continue
       }
-      for (const c of ["re", "cpf", "email"] as const) vistos[c].add(linha[c].toLowerCase())
+      for (const c of ["re", "cpf", "email"] as const) if (linha[c]) vistos[c].add(linha[c]!.toLowerCase())
       validas.push(linha)
     }
 
@@ -58,18 +59,18 @@ export async function POST(request: NextRequest) {
     const [reDb, cpfDb, emailDb] = await Promise.all([
       existentes("re", validas.map((l) => l.re)),
       existentes("cpf", validas.map((l) => l.cpf)),
-      existentes("email", validas.map((l) => l.email)),
+      existentes("email", validas.flatMap((l) => (l.email ? [l.email] : []))),
     ])
     const novas = validas.filter((l) => {
       const campo = reDb.has(l.re.toLowerCase())
         ? "RE"
         : cpfDb.has(l.cpf)
           ? "CPF"
-          : emailDb.has(l.email.toLowerCase())
+          : l.email && emailDb.has(l.email.toLowerCase())
             ? "Email"
             : null
       if (campo) {
-        result.duplicates.push({ row: l.row, field: campo, value: campo === "RE" ? l.re : campo === "CPF" ? l.cpf : l.email })
+        result.duplicates.push({ row: l.row, field: campo, value: campo === "RE" ? l.re : campo === "CPF" ? l.cpf : l.email! })
       }
       return !campo
     })

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
-import { audit, getAdmin, unauthorized } from "@/lib/auth"
+import { audit, exigirAdmin } from "@/lib/auth"
 import { chunk, normalizeCpfCell, normalizeDate, readImportFile } from "@/lib/planilha"
 import { dependenteSchema, firstIssue } from "@/lib/validation"
 import { DEPENDENCIA_LABEL, DEPENDENCIAS, normalizeDependencia, type ImportResult } from "@/lib/types"
@@ -28,8 +28,9 @@ type Linha = { row: number; re: string; dados: Record<string, string> }
 // Colunas: RE Colaborador, CPF Dependente, Nome Completo, Data Nascimento, Parentesco, Gênero (opcional)
 export async function POST(request: NextRequest) {
   try {
-    const admin = await getAdmin()
-    if (!admin) return unauthorized()
+    const auth = await exigirAdmin("cadastro")
+    if ("resposta" in auth) return auth.resposta
+    const { admin } = auth
 
     let rows
     try {

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { fetchAll, isUniqueViolation, supabaseAdmin } from "@/lib/supabase/server"
-import { audit, getAdmin, unauthorized } from "@/lib/auth"
+import { audit, exigirAdmin } from "@/lib/auth"
 import { dependenteSchema, firstIssue } from "@/lib/validation"
 
 export const dynamic = "force-dynamic"
@@ -13,8 +13,9 @@ const MSG_CPF_DUPLICADO = "Já existe um dependente cadastrado com este CPF."
  */
 export async function POST(request: NextRequest) {
   try {
-    const admin = await getAdmin()
-    if (!admin) return unauthorized()
+    const auth = await exigirAdmin("cadastro")
+    if ("resposta" in auth) return auth.resposta
+    const { admin } = auth
 
     const body = await request.json().catch(() => ({}))
     const re = typeof body?.re === "string" ? body.re.trim() : ""
@@ -59,7 +60,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    if (!(await getAdmin())) return unauthorized()
+    const auth = await exigirAdmin("cadastro")
+    if ("resposta" in auth) return auth.resposta
 
     const dependentes = await fetchAll((from, to) =>
       supabaseAdmin
@@ -69,7 +71,8 @@ export async function GET() {
         .range(from, to),
     )
 
-    return NextResponse.json({ dependentes })
+    // perfil: a tela esconde o que o usuário não pode usar (o servidor bloqueia de qualquer forma)
+    return NextResponse.json({ dependentes, perfil: auth.admin.perfil })
   } catch (error) {
     console.error("[admin/dependentes] erro ao listar:", (error as Error).message)
     return NextResponse.json({ error: "Erro ao buscar dependentes" }, { status: 500 })

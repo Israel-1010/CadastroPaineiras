@@ -1,12 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
-import { audit, getAdmin, unauthorized } from "@/lib/auth"
+import { audit, exigirAdmin } from "@/lib/auth"
 import { removeFace } from "@/lib/dahua"
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const admin = await getAdmin()
-    if (!admin) return unauthorized()
+    const auth = await exigirAdmin("presenca")
+    if ("resposta" in auth) return auth.resposta
+    const { admin } = auth
 
     const body = await request.json().catch(() => ({}))
     const { presenca_confirmada } = body
@@ -37,8 +38,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
 export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const admin = await getAdmin()
-    if (!admin) return unauthorized()
+    const auth = await exigirAdmin("excluir")
+    if ("resposta" in auth) return auth.resposta
+    const { admin } = auth
 
     const { data, error } = await supabaseAdmin
       .from("dependentes")

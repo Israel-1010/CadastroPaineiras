@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { fetchAll, supabaseAdmin } from "@/lib/supabase/server"
-import { audit, getAdmin, unauthorized } from "@/lib/auth"
+import { audit, exigirAdmin } from "@/lib/auth"
 import { enviarFaceDependente, type ResultadoFacial } from "@/lib/facial"
 import { photoKeyFromUrl } from "@/lib/s3"
 
@@ -28,7 +28,8 @@ type Modo = (typeof MODOS)[number]
  */
 export async function GET(request: NextRequest) {
   try {
-    if (!(await getAdmin())) return unauthorized()
+    const auth = await exigirAdmin("facial")
+    if ("resposta" in auth) return auth.resposta
     const param = request.nextUrl.searchParams.get("modo") as Modo
     const modo: Modo = MODOS.includes(param) ? param : "pendentes"
 
@@ -73,8 +74,9 @@ type ResultadoCarga = ResultadoFacial | "sem_foto" | "nao_encontrado"
 /** Envia um lote de dependentes às catracas e grava o resultado de cada um */
 export async function POST(request: NextRequest) {
   try {
-    const admin = await getAdmin()
-    if (!admin) return unauthorized()
+    const auth = await exigirAdmin("facial")
+    if ("resposta" in auth) return auth.resposta
+    const { admin } = auth
 
     const body = await request.json().catch(() => ({}))
     const ids: string[] = Array.isArray(body?.ids) ? body.ids.filter((v: unknown) => typeof v === "string") : []

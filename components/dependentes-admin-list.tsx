@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2, Clock3, Loader2, Eye, EyeOff, UserPlus } from "lucide-react"
 import { NovoDependenteAdminDialog } from "@/components/novo-dependente-admin-dialog"
+import { pode, type Perfil } from "@/lib/permissoes"
 import { formatCPF, maskCPF, onlyDigits } from "@/lib/cpf"
 import { DEPENDENCIA_LABEL, DEPENDENCIAS, dependenciaLabel, normalizeDependencia } from "@/lib/types"
 
@@ -43,6 +44,7 @@ export function DependentesAdminList() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showCPF, setShowCPF] = useState(false)
   const [novoAberto, setNovoAberto] = useState(false)
+  const [perfil, setPerfil] = useState<Perfil>("admin")
   const [mensagem, setMensagem] = useState<string | null>(null)
   const router = useRouter()
 
@@ -62,6 +64,7 @@ export function DependentesAdminList() {
 
         setDependentes(data.dependentes)
         setFilteredDependentes(data.dependentes)
+        setPerfil(data.perfil)
       } catch (error) {
         setLoadError((error as Error).message || "Erro ao carregar dependentes")
       } finally {
@@ -397,6 +400,7 @@ export function DependentesAdminList() {
                   </span>
                 </div>
 
+                {pode(perfil, "presenca") && (
                 <div className="flex space-x-2 pt-2">
                   <Button
                     variant={dependente.presenca_confirmada ? "outline" : "default"}
@@ -422,9 +426,8 @@ export function DependentesAdminList() {
                       </>
                     )}
                   </Button>
-
-                  
                 </div>
+                )}
               </CardContent>
             </Card>
           ))}

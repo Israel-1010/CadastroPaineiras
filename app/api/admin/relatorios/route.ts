@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 import { fetchAll, supabaseAdmin } from "@/lib/supabase/server"
-import { getAdmin, unauthorized } from "@/lib/auth"
+import { exigirAdmin } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    if (!(await getAdmin())) return unauthorized()
+    const auth = await exigirAdmin("relatorios")
+    if ("resposta" in auth) return auth.resposta
 
     const { count: totalColaboradores, error: countError } = await supabaseAdmin
       .from("colaboradores")

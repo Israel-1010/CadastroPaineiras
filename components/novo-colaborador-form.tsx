@@ -56,7 +56,8 @@ export function NovoColaboradorForm() {
         throw new Error("CPF inválido. Verifique os números digitados.")
       }
 
-      if (!validateEmail(formData.email)) {
+      // E-mail é opcional: só valida se foi preenchido
+      if (formData.email.trim() && !validateEmail(formData.email.trim())) {
         throw new Error("Email inválido. Verifique o formato do email.")
       }
 
@@ -162,7 +163,7 @@ export function NovoColaboradorForm() {
             {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">
-                Email *
+                Email (opcional)
               </Label>
               <Input
                 id="email"
@@ -170,7 +171,6 @@ export function NovoColaboradorForm() {
                 placeholder="colaborador@empresa.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
               />
             </div>
 
