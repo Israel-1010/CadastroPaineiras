@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Award as IdCard, Users, Send, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
+import { Calendar, Award as IdCard, Users, Send, Loader2, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { NovoDependenteModal } from "@/components/novo-dependente-modal"
 import { PhotoUpload } from "@/components/photo-upload"
+import { TermoModal } from "@/components/termo-modal"
 import { dependenciaLabel, normalizeDependencia, type Dependente } from "@/lib/types"
 import { ORIENTACAO_FOTO } from "@/lib/mensagens"
 
@@ -16,11 +18,16 @@ type EstadoEnvio = { status: "enviando" | "ok" | "erro"; mensagem?: string }
 interface DependentesListProps {
   dependentes: Dependente[]
   colaboradorId: string
+  /** PD-04: aceite da versão atual do termo de consentimento */
+  termoAceito: boolean
 }
 
-export function DependentesList({ dependentes: initialDependentes, colaboradorId }: DependentesListProps) {
+export function DependentesList({ dependentes: initialDependentes, colaboradorId, termoAceito }: DependentesListProps) {
   const [dependentes, setDependentes] = useState(initialDependentes)
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
+  // Sem aceite: câmera, galeria e envio bloqueados; o termo abre sozinho na primeira vez
+  const [aceito, setAceito] = useState(termoAceito)
+  const [termoAberto, setTermoAberto] = useState(!termoAceito && initialDependentes.length > 0)
   // Situação do envio às catracas, por dependente
   const [envio, setEnvio] = useState<Record<string, EstadoEnvio>>({})
   // Foto nova escolhida e ainda não enviada, por dependente
@@ -86,6 +93,16 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
       body: JSON.stringify(fotoNova ? { foto_url: fotoNova } : {}),
     }).catch(() => null)
     const json = await resp?.json().catch(() => ({}))
+    if (json?.termo_pendente) {
+      // Termo novo ou aceite não registrado: pede o aceite e mantém a foto escolhida
+      setEnvio((prev) => {
+        const { [dependente.id]: _, ...resto } = prev
+        return resto
+      })
+      setAceito(false)
+      setTermoAberto(true)
+      return
+    }
     if (json?.dependente) handleSaveDependente({ ...dependente, ...json.dependente })
     if (!resp?.ok) {
       // Recusada: o servidor já apagou o arquivo novo, então é preciso tirar outra
@@ -129,9 +146,21 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                 }`}
           </p>
         </div>
-
-        
       </div>
+
+      {!aceito && dependentes.length > 0 && (
+        <Alert className="border-amber-300 bg-amber-50">
+          <ShieldCheck className="h-4 w-4 text-amber-700" />
+          <AlertDescription className="flex flex-col gap-2 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+            <span>Antes de tirar e enviar as fotos, leia e aceite o termo de consentimento.</span>
+            <Button size="sm" onClick={() => setTermoAberto(true)} className="bg-[var(--primary)] text-white hover:opacity-90">
+              Ler e aceitar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <TermoModal open={termoAberto} onOpenChange={setTermoAberto} onAceito={() => setAceito(true)} />
 
       {/* Estado vazio */}
       {dependentes.length === 0 ? (
@@ -199,6 +228,7 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                   )}
                   <PhotoUpload
                     variant="buttons"
+                    disabled={!aceito}
                     userName={dependente.nome_completo}
                     onPhotoChange={(url) => url && handleNovaFoto(dependente.id, url)}
                   />
@@ -223,7 +253,7 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                       <Button
                         className="w-full bg-[var(--primary)] text-white hover:opacity-90"
                         onClick={() => handleEnviar(dependente)}
-                        disabled={!podeEnviar || estado === "enviando"}
+                        disabled={!aceito || !podeEnviar || estado === "enviando"}
                         title={podeEnviar ? undefined : "Tire ou escolha uma foto para enviar"}
                       >
                         {estado === "enviando" ? (

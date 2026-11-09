@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
 import { getColaboradorId, unauthorized } from "@/lib/auth"
 import { colaboradorParaTela, dependenteParaTela } from "@/lib/mascara"
+import { termoAceito } from "@/lib/aceite"
+import { TERMO_VERSAO } from "@/lib/termo"
 
 export const dynamic = "force-dynamic"
 
@@ -31,6 +33,8 @@ export async function GET() {
     return NextResponse.json({
       colaborador: colaboradorParaTela(colaborador),
       dependentes: (dependentes ?? []).map(dependenteParaTela),
+      // PD-04: sem aceite da versão atual, a tela mostra o termo e bloqueia câmera/galeria/envio
+      termo: { versao: TERMO_VERSAO, aceito: await termoAceito(colaborador.id) },
     })
   } catch (error) {
     console.error("[session] erro:", (error as Error).message)

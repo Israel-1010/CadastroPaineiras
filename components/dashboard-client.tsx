@@ -7,7 +7,11 @@ import { DependentesList } from "@/components/dependentes-list"
 import type { Colaborador, Dependente } from "@/lib/types"
 
 export function DashboardClient() {
-  const [data, setData] = useState<{ colaborador: Colaborador; dependentes: Dependente[] } | null>(null)
+  const [data, setData] = useState<{
+    colaborador: Colaborador
+    dependentes: Dependente[]
+    termo: { versao: string; aceito: boolean }
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -54,13 +58,13 @@ export function DashboardClient() {
     )
   }
 
-  const { colaborador, dependentes } = data
+  const { colaborador, dependentes, termo } = data
 
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardHeader colaborador={colaborador} />
       <main className="container mx-auto px-4 py-8">
-        <DependentesList dependentes={dependentes} colaboradorId={colaborador.id} />
+        <DependentesList dependentes={dependentes} colaboradorId={colaborador.id} termoAceito={termo.aceito} />
       </main>
     </div>
   )

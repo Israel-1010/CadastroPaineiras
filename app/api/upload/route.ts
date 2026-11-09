@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import { NextResponse } from "next/server"
 import sharp from "sharp"
 import { getColaboradorId, unauthorized } from "@/lib/auth"
+import { termoAceito, termoPendente } from "@/lib/aceite"
 import { photoPrefixFor, publicUrlForKey, putObject } from "@/lib/s3"
 
 export const runtime = "nodejs"
@@ -13,6 +14,8 @@ export async function POST(request: Request) {
   try {
     const colaboradorId = await getColaboradorId()
     if (!colaboradorId) return unauthorized()
+    // PD-04: a foto (dado biométrico) só é recebida depois do aceite do termo
+    if (!(await termoAceito(colaboradorId))) return termoPendente()
 
     const declared = Number(request.headers.get("content-length") || 0)
     if (declared > MAX_BYTES) {

@@ -39,6 +39,6 @@ export const config = {
     "/api/admin/:path*",
     "/api/dependentes/:path*",
     "/api/upload",
-    "/api/dahua/:path*",
+    "/api/termo",
   ],
 }

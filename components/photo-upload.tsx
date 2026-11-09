@@ -33,6 +33,8 @@ interface PhotoUploadProps {
   onUploadingChange?: (uploading: boolean) => void
   /** "buttons": só os botões Câmera/Galeria (cartão do dependente sem foto) */
   variant?: "full" | "buttons"
+  /** Bloqueia câmera e galeria (ex.: termo de consentimento ainda não aceito) */
+  disabled?: boolean
 }
 
 export function PhotoUpload({
@@ -41,6 +43,7 @@ export function PhotoUpload({
   userName,
   onUploadingChange,
   variant = "full",
+  disabled = false,
 }: PhotoUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -237,11 +240,11 @@ export function PhotoUpload({
     <div className="space-y-4">
       {variant === "buttons" ? (
         <div className="grid grid-cols-2 gap-2">
-          <Button type="button" variant="outline" onClick={startCamera} disabled={isUploading}>
+          <Button type="button" variant="outline" onClick={startCamera} disabled={isUploading || disabled}>
             {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
             <span>Câmera</span>
           </Button>
-          <Button type="button" variant="outline" onClick={triggerFileInput} disabled={isUploading}>
+          <Button type="button" variant="outline" onClick={triggerFileInput} disabled={isUploading || disabled}>
             {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
             <span>Galeria</span>
           </Button>

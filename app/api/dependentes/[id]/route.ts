@@ -4,6 +4,7 @@ import { audit, getColaboradorId, unauthorized } from "@/lib/auth"
 import { enviarFaceDependente } from "@/lib/facial"
 import { ORIENTACAO_FOTO } from "@/lib/mensagens"
 import { dependenteParaTela } from "@/lib/mascara"
+import { termoAceito, termoPendente } from "@/lib/aceite"
 import { deleteObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
 
 export const runtime = "nodejs"
@@ -26,6 +27,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   try {
     const colaboradorId = await getColaboradorId()
     if (!colaboradorId) return unauthorized()
+    // PD-04: envio às catracas só depois do aceite do termo
+    if (!(await termoAceito(colaboradorId))) return termoPendente()
 
     const body = await request.json().catch(() => ({}))
     const fotoUrlBody = typeof body?.foto_url === "string" ? body.foto_url : ""
