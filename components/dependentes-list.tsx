@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -32,6 +32,15 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
   const [envio, setEnvio] = useState<Record<string, EstadoEnvio>>({})
   // Foto nova escolhida e ainda não enviada, por dependente
   const [pendente, setPendente] = useState<Record<string, string>>({})
+
+  // Foto escolhida e não enviada se perde ao atualizar/fechar a página: o navegador pergunta antes
+  const temPendente = Object.keys(pendente).length > 0
+  useEffect(() => {
+    if (!temPendente) return
+    const aviso = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener("beforeunload", aviso)
+    return () => window.removeEventListener("beforeunload", aviso)
+  }, [temPendente])
 
   const formatDateTime = (iso: string) => {
     const d = new Date(iso)
@@ -264,6 +273,14 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                       </Button>
                     )
                   })()}
+
+                  {/* Foto escolhida que ainda só existe nesta tela: some ao atualizar se não for enviada */}
+                  {pendente[dependente.id] && envio[dependente.id]?.status !== "enviando" && (
+                    <p className="flex items-start gap-1.5 text-sm text-amber-700">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      Foto nova ainda não enviada. Clique em &quot;Enviar foto&quot;: ela só fica salva se a catraca aceitar.
+                    </p>
+                  )}
 
                   {/* Sucesso só quando o próprio colaborador enviou (a carga do admin não mostra aviso);
                       some quando há resultado novo nesta tela */}
