@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { Baby, BarChart3, FileSpreadsheet, FileUp, ScanFace, Settings, UserPlus, Users, type LucideIcon } from "lucide-react"
+import { Baby, BarChart3, FileSpreadsheet, FileUp, ScanFace, Settings, Users, type LucideIcon } from "lucide-react"
 import { pode, type Perfil, type Permissao } from "@/lib/permissoes"
 
 export function AdminNavigation({ perfil }: { perfil: Perfil }) {
@@ -19,17 +19,9 @@ export function AdminNavigation({ perfil }: { perfil: Perfil }) {
     action: () => void
   }> = [
     {
-      title: "Cadastrar Colaborador",
-      description: "Adicionar novo colaborador manualmente",
-      icon: UserPlus,
-      iconColor: "text-blue-600",
-      color: "bg-blue-50 border-blue-200",
-      permissao: "cadastro",
-      action: () => router.push("/admin/colaboradores/novo"),
-    },
-    {
       title: "Gerenciar Colaboradores",
-      description: "Visualizar e editar colaboradores existentes",
+      // O cadastro manual fica no botão dentro desta tela (o card próprio foi retirado)
+      description: "Visualizar, cadastrar e editar colaboradores",
       icon: Users,
       iconColor: "text-green-600",
       color: "bg-green-50 border-green-200",
