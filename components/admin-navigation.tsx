@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { Baby, BarChart3, FileSpreadsheet, FileUp, ScanFace, Settings, Users, type LucideIcon } from "lucide-react"
+import { Baby, BarChart3, ScanFace, Settings, Users, type LucideIcon } from "lucide-react"
 import { pode, type Perfil, type Permissao } from "@/lib/permissoes"
 
 export function AdminNavigation({ perfil }: { perfil: Perfil }) {
@@ -28,24 +28,7 @@ export function AdminNavigation({ perfil }: { perfil: Perfil }) {
       permissao: "cadastro",
       action: () => router.push("/admin/colaboradores"),
     },
-    {
-      title: "Upload Colaboradores",
-      description: "Importar colaboradores via arquivo Excel",
-      icon: FileSpreadsheet,
-      iconColor: "text-purple-600",
-      color: "bg-purple-50 border-purple-200",
-      permissao: "cadastro",
-      action: () => router.push("/admin/upload"),
-    },
-    {
-      title: "Upload Dependentes",
-      description: "Importar dependentes via arquivo Excel",
-      icon: FileUp,
-      iconColor: "text-orange-600",
-      color: "bg-orange-50 border-orange-200",
-      permissao: "cadastro",
-      action: () => router.push("/admin/upload-dependentes"),
-    },
+    // Os cards de upload por planilha foram retirados do painel (as páginas /admin/upload* continuam existindo)
     {
       title: "Gerenciar Dependentes",
       description: "Visualizar e gerenciar todos os dependentes",
