@@ -3,6 +3,7 @@ import { isUniqueViolation, supabaseAdmin } from "@/lib/supabase/server"
 import { audit, getColaboradorId, unauthorized } from "@/lib/auth"
 import { isOwnPhotoUrl } from "@/lib/s3"
 import { dependenteSchema, firstIssue } from "@/lib/validation"
+import { dependenteParaTela } from "@/lib/mascara"
 
 const DEPENDENTE_COLUMNS = "id, nome_completo, cpf, genero, dependencia, data_nascimento, foto_url, colaborador_id"
 
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     if (error) throw new Error(error.message)
 
     await audit({ tipo: "colaborador", id: colaboradorId }, "criar", "dependentes", data.id)
-    return NextResponse.json({ dependente: data })
+    return NextResponse.json({ dependente: dependenteParaTela(data) })
   } catch (error) {
     console.error("[dependentes] erro ao inserir:", (error as Error).message)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })

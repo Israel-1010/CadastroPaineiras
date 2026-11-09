@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { LogOut, User } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useMemo } from "react"
-import { formatCPF } from "@/lib/cpf"
 import type { Colaborador } from "@/lib/types"
 
 interface DashboardHeaderProps {
@@ -75,7 +74,7 @@ export function DashboardHeader({ colaborador }: DashboardHeaderProps) {
                       <span className="text-[var(--muted-foreground)]">RE:</span> {colaborador.re}
                     </span>
                     <span className="truncate">
-                      <span className="text-[var(--muted-foreground)]">CPF:</span> {formatCPF(colaborador.cpf)}
+                      <span className="text-[var(--muted-foreground)]">CPF:</span> {colaborador.cpf /* já mascarado pelo servidor */}
                     </span>
                   </div>
                 </div>

@@ -3,6 +3,7 @@ import { createHash, randomUUID, timingSafeEqual } from "crypto"
 import { compare, hashSync } from "bcryptjs"
 import { supabaseAdmin } from "@/lib/supabase/server"
 import { audit, clientIp, setSessionCookie } from "@/lib/auth"
+import { limparFalhas, registrarFalha, respostaBloqueio, segundosBloqueado } from "@/lib/rate-limit"
 import { loginAdminSchema } from "@/lib/validation"
 
 const INVALID = "Usuário ou senha inválidos"
@@ -21,6 +22,15 @@ export async function POST(request: NextRequest) {
     }
     const { username, password } = parsed.data
     const ip = clientIp(request)
+
+    // PD-03: 5 erros no mesmo usuário (a partir do mesmo IP) ou 20 de um IP -> 15 minutos de bloqueio
+    const chaveUsuario = `admin:${username.toLowerCase()}:${ip}`
+    const chaveIp = ip === "local" ? null : `admin-ip:${ip}`
+    const espera = Math.max(segundosBloqueado(chaveUsuario), chaveIp ? segundosBloqueado(chaveIp) : 0)
+    if (espera) {
+      const { body, init } = respostaBloqueio(espera)
+      return NextResponse.json(body, init)
+    }
 
     const { data: admin, error } = await supabaseAdmin
       .from("administradores")
@@ -48,9 +58,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (!admin || !valid) {
+      registrarFalha(chaveUsuario, 5)
+      if (chaveIp) registrarFalha(chaveIp, 20)
       return NextResponse.json({ error: INVALID }, { status: 401 })
     }
 
+    limparFalhas(chaveUsuario)
     await audit({ tipo: "admin", id: admin.id }, "login", "administradores", admin.id, { ip })
 
     const { password_hash, ...adminData } = admin

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
 import { getColaboradorId, unauthorized } from "@/lib/auth"
+import { colaboradorParaTela, dependenteParaTela } from "@/lib/mascara"
 
 export const dynamic = "force-dynamic"
 
@@ -11,7 +12,7 @@ export async function GET() {
 
     const { data: colaborador, error } = await supabaseAdmin
       .from("colaboradores")
-      .select("id, re, cpf, nome_completo, email")
+      .select("id, re, cpf, nome_completo")
       .eq("id", colaboradorId)
       .maybeSingle()
 
@@ -26,7 +27,11 @@ export async function GET() {
 
     if (dependentesError) throw new Error(dependentesError.message)
 
-    return NextResponse.json({ colaborador, dependentes: dependentes ?? [] })
+    // PD-01: a tela recebe nome, CPF e nascimento já mascarados
+    return NextResponse.json({
+      colaborador: colaboradorParaTela(colaborador),
+      dependentes: (dependentes ?? []).map(dependenteParaTela),
+    })
   } catch (error) {
     console.error("[session] erro:", (error as Error).message)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })

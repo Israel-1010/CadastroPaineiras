@@ -8,7 +8,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Calendar, Award as IdCard, Users, Send, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { NovoDependenteModal } from "@/components/novo-dependente-modal"
 import { PhotoUpload } from "@/components/photo-upload"
-import { formatCPF } from "@/lib/cpf"
 import { dependenciaLabel, normalizeDependencia, type Dependente } from "@/lib/types"
 import { ORIENTACAO_FOTO } from "@/lib/mensagens"
 
@@ -26,13 +25,6 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
   const [envio, setEnvio] = useState<Record<string, EstadoEnvio>>({})
   // Foto nova escolhida e ainda não enviada, por dependente
   const [pendente, setPendente] = useState<Record<string, string>>({})
-
-  const formatDate = (raw: string) => {
-  const m = String(raw || "").match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (!m) return String(raw || "")
-  const [, y, mo, d] = m
-  return `${d}/${mo}/${y}` // pt-BR, sem timezone
-}
 
   const formatDateTime = (iso: string) => {
     const d = new Date(iso)
@@ -190,12 +182,13 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-2 text-sm text-[var(--accent-foreground)]">
                   <IdCard className="w-4 h-4 text-[var(--primary)]" />
-                  <span className="truncate">CPF: {formatCPF(dependente.cpf)}</span>
+                  {/* CPF e nascimento já chegam mascarados do servidor (PD-01) */}
+                  <span className="truncate">CPF: {dependente.cpf}</span>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-[var(--accent-foreground)]">
                   <Calendar className="w-4 h-4 text-[var(--primary)]" />
-                  <span className="truncate">Nascimento: {formatDate(dependente.data_nascimento)}</span>
+                  <span className="truncate">Nascimento: {dependente.data_nascimento}</span>
                 </div>
 
                 <div className="pt-2 space-y-2">

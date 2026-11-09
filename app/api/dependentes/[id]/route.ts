@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/server"
 import { audit, getColaboradorId, unauthorized } from "@/lib/auth"
 import { enviarFaceDependente } from "@/lib/facial"
 import { ORIENTACAO_FOTO } from "@/lib/mensagens"
+import { dependenteParaTela } from "@/lib/mascara"
 import { deleteObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
 
 export const runtime = "nodejs"
@@ -76,7 +77,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         foto_enviada_em: new Date().toISOString(),
         foto_enviada_por: "colaborador",
       })
-      return NextResponse.json({ error: MSG_RECUSADA, descartada: novaFoto, dependente: data }, { status: 422 })
+      return NextResponse.json(
+        { error: MSG_RECUSADA, descartada: novaFoto, dependente: data ? dependenteParaTela(data) : null },
+        { status: 422 },
+      )
     }
 
     const { data, error } = await registrar({
@@ -89,7 +93,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (!data) return NextResponse.json({ error: "Dependente não encontrado" }, { status: 404 })
 
     await audit({ tipo: "colaborador", id: colaboradorId }, novaFoto ? "foto" : "reenvio_foto", "dependentes", data.id)
-    return NextResponse.json({ dependente: data })
+    return NextResponse.json({ dependente: dependenteParaTela(data) })
   } catch (error) {
     console.error("[dependentes] erro ao enviar foto:", (error as Error).message)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
