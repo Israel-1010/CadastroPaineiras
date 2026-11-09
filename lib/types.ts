@@ -35,8 +35,23 @@ export function normalizeDependencia(value: string): string {
   return DEPENDENCIAS.find((d) => semAcento(d) === v) ?? value.trim()
 }
 
-export const dependenciaLabel = (value: string) =>
-  DEPENDENCIA_LABEL[normalizeDependencia(value) as Dependencia] ?? value
+// A planilha usa "FILHO (A)", "ENTEADO", "COMPANHEIRO" para os dois sexos: a etiqueta segue o gênero
+const LABEL_FEMININO: Partial<Record<Dependencia, string>> = {
+  Filho: "Filha",
+  Enteado: "Enteada",
+  Companheiro: "Companheira",
+}
+const LABEL_MASCULINO: Partial<Record<Dependencia, string>> = {
+  Filha: "Filho",
+  Companheiro: "Companheiro",
+}
+
+export const dependenciaLabel = (value: string, genero?: string | null) => {
+  const dep = normalizeDependencia(value) as Dependencia
+  if (genero === "Feminino" && LABEL_FEMININO[dep]) return LABEL_FEMININO[dep]!
+  if (genero === "Masculino" && LABEL_MASCULINO[dep]) return LABEL_MASCULINO[dep]!
+  return DEPENDENCIA_LABEL[dep] ?? value
+}
 
 export interface Colaborador {
   id: string

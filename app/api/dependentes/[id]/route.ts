@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/server"
 import { audit, getColaboradorId, unauthorized } from "@/lib/auth"
 import { enviarFaceDependente } from "@/lib/facial"
+import { ORIENTACAO_FOTO } from "@/lib/mensagens"
 import { deleteObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
 
 export const runtime = "nodejs"
@@ -9,8 +10,7 @@ export const runtime = "nodejs"
 const DEPENDENTE_COLUMNS =
   "id, nome_completo, cpf, genero, dependencia, data_nascimento, foto_url, colaborador_id, foto_aceita, foto_enviada_em, foto_enviada_por"
 
-const MSG_RECUSADA =
-  "A catraca não aceitou esta foto (o rosto precisa estar de frente, bem iluminado e sem óculos escuros ou boné). Tire outra foto."
+const MSG_RECUSADA = `A catraca não aceitou esta foto. ${ORIENTACAO_FOTO} Tire outra foto.`
 const MSG_SEM_CONEXAO = "Não foi possível conectar às catracas agora. Tente enviar de novo em instantes."
 
 // O colaborador NÃO altera dados do dependente (nome, CPF, parentesco...): só envia a foto.

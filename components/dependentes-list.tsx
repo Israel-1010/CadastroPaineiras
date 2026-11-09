@@ -10,6 +10,7 @@ import { NovoDependenteModal } from "@/components/novo-dependente-modal"
 import { PhotoUpload } from "@/components/photo-upload"
 import { formatCPF } from "@/lib/cpf"
 import { dependenciaLabel, normalizeDependencia, type Dependente } from "@/lib/types"
+import { ORIENTACAO_FOTO } from "@/lib/mensagens"
 
 type EstadoEnvio = { status: "enviando" | "ok" | "erro"; mensagem?: string }
 
@@ -104,7 +105,12 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
       return setEnvioDe(dependente.id, { status: "erro", mensagem })
     }
     descartarPendente(dependente.id)
-    setEnvioDe(dependente.id, { status: "ok", mensagem: "Foto enviada às catracas com sucesso!" })
+    // Mesma confirmação dos acessos seguintes: com data e hora do envio (registradas pelo servidor)
+    const enviadaEm = json?.dependente?.foto_enviada_em
+    setEnvioDe(dependente.id, {
+      status: "ok",
+      mensagem: `Foto enviada às catracas${enviadaEm ? ` em ${formatDateTime(enviadaEm)}` : ""}`,
+    })
   }
 
   const handleSaveDependente = (updatedDependente: Dependente) => {
@@ -172,7 +178,7 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                     </CardTitle>
 
                     <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <Badge className={getDependenciaClass(dependente.dependencia)}>{dependenciaLabel(dependente.dependencia)}</Badge>
+                      <Badge className={getDependenciaClass(dependente.dependencia)}>{dependenciaLabel(dependente.dependencia, dependente.genero)}</Badge>
                       <Badge variant="outline" className={getGeneroClass(dependente.genero)}>
                         {dependente.genero}
                       </Badge>
@@ -252,8 +258,8 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                       {/* Sem foto salva (a primeira foto foi recusada): não há o que reenviar */}
                       {dependente.foto_url
-                        ? "A catraca recusou o último envio. Envie de novo ou tire outra foto."
-                        : "A catraca recusou a foto enviada. Tire outra foto."}
+                        ? `A catraca recusou o último envio. ${ORIENTACAO_FOTO} Envie de novo ou tire outra foto.`
+                        : `A catraca recusou a foto enviada. ${ORIENTACAO_FOTO} Tire outra foto.`}
                     </p>
                   )}
                   {envio[dependente.id]?.status === "ok" && (

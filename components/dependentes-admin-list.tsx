@@ -355,7 +355,7 @@ export function DependentesAdminList() {
                     <CardTitle className="text-lg leading-tight break-words">{dependente.nome_completo}</CardTitle>
                     <div className="flex items-center space-x-2 mt-1">
                       <Badge className={getDependenciaColor(dependente.dependencia)}>
-                        {dependenciaLabel(dependente.dependencia)}
+                        {dependenciaLabel(dependente.dependencia, dependente.genero)}
                       </Badge>
                       <Badge variant="outline" className={getGeneroColor(dependente.genero)}>
                         {dependente.genero}
