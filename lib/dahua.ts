@@ -269,6 +269,47 @@ export async function upsertCard(cpf: string, nomeCompleto: string) {
   return { ok: perIp.some((r) => r.ok), results: perIp }
 }
 
+/** Remove os cartões AccessControlCard com CardNo = CPF (procura o RecNo e apaga cada registro) */
+async function removeCardOnIp(ip: string, cpf: string, user: string, pass: string): Promise<string> {
+  const find = await dahuaFetch({
+    url: `http://${ip}/cgi-bin/recordFinder.cgi?action=find&name=AccessControlCard&condition.CardNo=${encodeURIComponent(cpf)}`,
+    method: "GET",
+    user,
+    pass,
+  })
+  const body = await find.r.text().catch(() => "")
+  if (!find.r.ok) return `erro ${find.r.status} ao procurar`
+  const recnos = [...body.matchAll(/records\[\d+\]\.RecNo=(\d+)/g)].map((m) => m[1])
+  if (recnos.length === 0) return "não havia"
+  for (const recno of recnos) {
+    const rem = await dahuaFetch({
+      url: `http://${ip}/cgi-bin/recordUpdater.cgi?action=remove&name=AccessControlCard&recno=${recno}`,
+      method: "GET",
+      user,
+      pass,
+    })
+    if (!rem.r.ok) return `erro ${rem.r.status} ao remover`
+  }
+  return "removido"
+}
+
+export type RemocaoTerminal = { ip: string; face: string; cartao: string }
+
+/** PD-08: remove face e cartão de um CPF em todos os terminais, com o resultado de cada um */
+export async function removerDasCatracas(cpf: string): Promise<RemocaoTerminal[]> {
+  const { user, pass, ips } = config()
+  const results = await Promise.allSettled(
+    ips.map(async (ip) => {
+      const face = await removeOnIp(ip, cpf, user, pass)
+      const cartao = await removeCardOnIp(ip, cpf, user, pass)
+      return { ip, face: face.status === 200 ? "removida" : `erro ${face.status}`, cartao }
+    }),
+  )
+  return results.map((r, i) =>
+    r.status === "fulfilled" ? r.value : { ip: ips[i], face: "sem conexão", cartao: "sem conexão" },
+  )
+}
+
 /** Remove a face de todos os terminais (best effort; nunca lança) */
 export async function removeFace(cpf: string) {
   try {

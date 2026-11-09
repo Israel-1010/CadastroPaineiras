@@ -1,4 +1,5 @@
 import { CargaFacial } from "@/components/carga-facial"
+import { RemoverCatracas } from "@/components/remover-catracas"
 
 export default function CargaFacialPage() {
   return (
@@ -10,6 +11,9 @@ export default function CargaFacialPage() {
         </div>
 
         <CargaFacial />
+        <div className="mt-6">
+          <RemoverCatracas />
+        </div>
       </div>
     </div>
   )
