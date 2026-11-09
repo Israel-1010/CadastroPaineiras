@@ -5,6 +5,7 @@ import { enviarFaceDependente } from "@/lib/facial"
 import { ORIENTACAO_FOTO } from "@/lib/mensagens"
 import { dependenteParaTela } from "@/lib/mascara"
 import { termoAceito, termoPendente } from "@/lib/aceite"
+import { registrarEnvio } from "@/lib/log-envios"
 import { deleteObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
 
 export const runtime = "nodejs"
@@ -60,6 +61,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         .maybeSingle()
 
     const resultado = await enviarFaceDependente(dependente, key)
+
+    // PD-05: histórico de todo envio (inclusive recusas e falhas), com a foto anterior quando é troca
+    await registrarEnvio(request, {
+      origem: "colaborador",
+      acao: !novaFoto ? "reenvio" : dependente.foto_url ? "troca" : "envio",
+      resultado,
+      dependente: { ...dependente, colaborador_id: colaboradorId },
+      fotoUrl,
+      fotoAnterior: novaFoto ? dependente.foto_url : null,
+    })
 
     // Nenhum terminal respondeu: problema de rede, não da foto
     if (resultado === "sem_conexao") {

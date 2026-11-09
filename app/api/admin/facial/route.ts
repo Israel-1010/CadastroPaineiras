@@ -3,6 +3,7 @@ import { fetchAll, supabaseAdmin } from "@/lib/supabase/server"
 import { audit, exigirAdmin } from "@/lib/auth"
 import { enviarFaceDependente, type ResultadoFacial } from "@/lib/facial"
 import { photoKeyFromUrl } from "@/lib/s3"
+import { registrarEnvio } from "@/lib/log-envios"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     const { data: dependentes, error } = await supabaseAdmin
       .from("dependentes")
-      .select("id, cpf, nome_completo, foto_url")
+      .select("id, cpf, nome_completo, foto_url, colaborador_id")
       .in("id", ids)
     if (error) throw new Error(error.message)
     const porId = new Map((dependentes ?? []).map((d) => [d.id, d]))
@@ -102,6 +103,8 @@ export async function POST(request: NextRequest) {
 
       const resultado = await enviarFaceDependente(dependente, key)
       resultados.push({ id, resultado })
+      // PD-05: histórico da carga feita pelo admin
+      await registrarEnvio(request, { origem: "admin", acao: "carga", resultado, dependente, adminId: admin.id, fotoUrl: dependente.foto_url })
       // Catracas fora do ar: não adianta continuar o lote
       if (resultado === "sem_conexao") break
 

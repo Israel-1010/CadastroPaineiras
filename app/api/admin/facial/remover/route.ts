@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/server"
 import { audit, exigirAdmin } from "@/lib/auth"
 import { onlyDigits } from "@/lib/cpf"
 import { removerDasCatracas, type RemocaoTerminal } from "@/lib/dahua"
+import { registrarEnvio } from "@/lib/log-envios"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const { data: deps, error } = await supabaseAdmin
       .from("dependentes")
-      .select("id, cpf, nome_completo, foto_url, foto_aceita, colaborador:colaboradores(nome_completo, re)")
+      .select("id, cpf, nome_completo, foto_url, foto_aceita, colaborador_id, colaborador:colaboradores(nome_completo, re)")
       .in("cpf", cpfs)
     if (error) throw new Error(error.message)
     const porCpf = new Map((deps ?? []).map((d) => [onlyDigits(d.cpf), d]))
@@ -69,6 +70,18 @@ export async function POST(request: NextRequest) {
           .eq("id", dep.id)
         if (updError) console.warn("[admin/facial/remover] situação não atualizada:", updError.message)
       }
+      // PD-05: histórico da remoção (CPF guardado mesmo quando o dependente já saiu do banco)
+      const faces = terminais.map((t) => t.face)
+      await registrarEnvio(request, {
+        origem: "admin",
+        acao: "remocao",
+        resultado: faces.every((f) => f === "removida") ? "removida" : faces.every((f) => f === "sem conexão") ? "sem_conexao" : "erro",
+        dependente: dep ?? null,
+        cpf,
+        adminId: admin.id,
+        fotoAnterior: apagarFoto ? dep?.foto_url : null,
+        detalhes: { terminais, apagarFoto },
+      })
       itens.push({ cpf, ...quem(cpf), terminais })
     }
 
