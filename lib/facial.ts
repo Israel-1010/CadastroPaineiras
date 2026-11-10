@@ -5,7 +5,7 @@ import { getObject } from "@/lib/s3"
 
 /**
  * aceita:      ao menos um terminal cadastrou a face
- * recusada:    os terminais responderam, mas recusaram a foto (a face anterior já foi removida deles)
+ * recusada:    os terminais responderam, mas recusaram a foto (a face anterior, se havia, continua neles)
  * sem_conexao: nenhum terminal respondeu (ou integração não configurada): problema de rede, não da foto
  * erro_foto:   não foi possível ler/processar a imagem
  */
@@ -29,7 +29,11 @@ export async function enviarFaceDependente(
     return msg.includes("não configurada") ? "sem_conexao" : "erro_foto"
   }
 
-  if (face.ok) return "aceita"
+  if (face.ok) {
+    // add = não tinha face; update = trocou a que já existia (nada é removido antes)
+    console.info("[facial] face cadastrada:", face.results.map((r) => `${r.ip}=${"modo" in r && r.modo ? r.modo : "falhou"}`).join(" "))
+    return "aceita"
+  }
   if (face.results.every((r) => "error" in r)) {
     console.warn("[facial] catracas inacessíveis:", JSON.stringify(face.results))
     return "sem_conexao"

@@ -5,7 +5,6 @@ import sharp from "sharp"
 
 const MAX_BYTES = 200 * 1024
 const MAX_SIZE = 512
-const REMOVE_ADD_DELAY_MS = 250
 const TIMEOUT_MS = 8000
 
 const md5 = (s: string) => crypto.createHash("md5").update(s).digest("hex")
@@ -157,43 +156,37 @@ async function removeOnIp(ip: string, cpf: string, user: string, pass: string) {
   return { status: rem.r.status, auth: rem.auth, body: text.slice(0, 300) }
 }
 
-async function removeAndAddOnIp(ip: string, cpf: string, userName: string, jpgB64: string, user: string, pass: string) {
-  const remove = await removeOnIp(ip, cpf, user, pass)
-  await new Promise((r) => setTimeout(r, REMOVE_ADD_DELAY_MS))
-
-  // add (PhotoData), fallback FaceData
-  const addUrl = `http://${ip}/cgi-bin/FaceInfoManager.cgi?action=add`
-  const post = (field: "PhotoData" | "FaceData") =>
-    dahuaFetch({
-      url: addUrl,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ UserID: cpf, Info: { UserName: userName, [field]: [jpgB64] } }),
-      user,
-      pass,
-    })
-  let variant: "PhotoData" | "FaceData" = "PhotoData"
-  let add = await post(variant)
-  let addText = await add.r.text().catch(() => "")
-  if (!add.r.ok) {
-    variant = "FaceData"
-    add = await post(variant)
-    addText = await add.r.text().catch(() => "")
+/**
+ * Cadastra a face SEM apagar a que já existe:
+ * "add" (quem ainda não tem face) e, se o terminal não aceitar, "update" (troca a face de quem já tem).
+ * Se as duas tentativas falharem (foto recusada), a face anterior continua no terminal.
+ */
+async function addOrUpdateOnIp(ip: string, cpf: string, userName: string, jpgB64: string, user: string, pass: string) {
+  const tentativas: Array<{ action: string; field: string; status: number; body: string }> = []
+  for (const field of ["PhotoData", "FaceData"] as const) {
+    for (const action of ["add", "update"] as const) {
+      const r = await dahuaFetch({
+        url: `http://${ip}/cgi-bin/FaceInfoManager.cgi?action=${action}`,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ UserID: cpf, Info: { UserName: userName, [field]: [jpgB64] } }),
+        user,
+        pass,
+      })
+      const body = await r.r.text().catch(() => "")
+      tentativas.push({ action, field, status: r.r.status, body: body.slice(0, 300) })
+      if (r.r.ok) return { ip, ok: true, modo: `${action}/${field}`, tentativas }
+    }
   }
-  return {
-    ip,
-    remove,
-    add: { status: add.r.status, auth: add.auth, body: addText.slice(0, 600), variant },
-    ok: add.r.ok,
-  }
+  return { ip, ok: false, tentativas }
 }
 
-/** Cadastra/atualiza a face em todos os terminais. Retorna resultado por IP. */
+/** Cadastra/troca a face em todos os terminais, sem remover a anterior. Retorna resultado por IP. */
 export async function syncFace(cpf: string, nomeCompleto: string, photo: Buffer) {
   const { user, pass, ips } = config()
   const userName = nomeTerminal(nomeCompleto)
   const b64 = (await compressToUnder200KB(photo)).toString("base64")
-  const results = await Promise.allSettled(ips.map((ip) => removeAndAddOnIp(ip, cpf, userName, b64, user, pass)))
+  const results = await Promise.allSettled(ips.map((ip) => addOrUpdateOnIp(ip, cpf, userName, b64, user, pass)))
   const perIp = results.map((r, i) =>
     r.status === "fulfilled" ? r.value : { ip: ips[i], ok: false, error: (r.reason as Error)?.message || "erro" },
   )

@@ -8,7 +8,7 @@ import { registrarEnvio } from "@/lib/log-envios"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// Lote pequeno: cada foto leva alguns segundos (remove + cadastra em cada terminal),
+// Lote pequeno: cada foto leva alguns segundos (cadastra ou troca em cada terminal),
 // e o pedido precisa terminar antes do timeout do proxy. O navegador chama lote após lote.
 const MAX_LOTE = 10
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     const { data: dependentes, error } = await supabaseAdmin
       .from("dependentes")
-      .select("id, cpf, nome_completo, foto_url, colaborador_id")
+      .select("id, cpf, nome_completo, foto_url, colaborador_id, foto_aceita")
       .in("id", ids)
     if (error) throw new Error(error.message)
     const porId = new Map((dependentes ?? []).map((d) => [d.id, d]))
@@ -108,7 +108,9 @@ export async function POST(request: NextRequest) {
       // Catracas fora do ar: não adianta continuar o lote
       if (resultado === "sem_conexao") break
 
-      if (resultado === "aceita" || resultado === "recusada") {
+      // Recusada para quem já estava aceito: a face anterior continua na catraca (nada é removido), então nada muda
+      const continuaValendo = resultado === "recusada" && dependente.foto_aceita === true
+      if ((resultado === "aceita" || resultado === "recusada") && !continuaValendo) {
         const agora = new Date().toISOString()
         // foto_enviada_por fica intacto: o aviso de sucesso no cartão é só para envio feito pelo colaborador
         const { error: updError } = await supabaseAdmin

@@ -312,7 +312,7 @@ export function CargaFacial() {
             <AlertDialogTitle>Enviar {fila.length} foto{fila.length > 1 ? "s" : ""} às catracas?</AlertDialogTitle>
             <AlertDialogDescription>
               {modo === "todas"
-                ? "Cada face é removida e cadastrada de novo nas catracas. "
+                ? "Todas as fotos serão enviadas de novo. Quem já tem face na catraca só tem a face trocada se a nova for aceita; nenhuma é apagada. "
                 : modo === "recusadas"
                   ? "As fotos recusadas na última tentativa serão enviadas de novo às catracas. "
                   : "As fotos ainda não enviadas serão cadastradas nas catracas. "}

@@ -38,7 +38,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const { data: dependente, error: findError } = await supabaseAdmin
       .from("dependentes")
-      .select("id, cpf, nome_completo, foto_url, foto_enviada_em")
+      .select("id, cpf, nome_completo, foto_url, foto_enviada_em, foto_aceita")
       .eq("id", params.id)
       .eq("colaborador_id", colaboradorId)
       .maybeSingle()
@@ -98,9 +98,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         { status: 502 },
       )
     }
-    // O facial recusou (e a face anterior já foi removida dos terminais)
+    // O facial recusou. Nada é removido antes do envio: se a foto anterior já estava aceita, ela continua valendo
     if (resultado === "recusada") {
       if (novaFoto) await deleteObject(key)
+      if (dependente.foto_aceita === true) {
+        return NextResponse.json(
+          { error: `${MSG_RECUSADA} A foto anterior continua valendo nas catracas.`, descartada: novaFoto },
+          { status: 422 },
+        )
+      }
       const { data } = await registrar({
         foto_aceita: false,
         foto_enviada_em: new Date().toISOString(),
