@@ -4,6 +4,7 @@ import { getColaboradorId, unauthorized } from "@/lib/auth"
 import { colaboradorParaTela, dependenteParaTela } from "@/lib/mascara"
 import { termoAceito } from "@/lib/aceite"
 import { TERMO_VERSAO } from "@/lib/termo"
+import { passagensDepoisDoEnvio } from "@/lib/passagens"
 
 export const dynamic = "force-dynamic"
 
@@ -29,10 +30,13 @@ export async function GET() {
 
     if (dependentesError) throw new Error(dependentesError.message)
 
+    // Quem já passou pelo facial com a foto atual não pode mais trocar a foto
+    const passagens = await passagensDepoisDoEnvio(dependentes ?? [])
+
     // PD-01: a tela recebe nome, CPF e nascimento já mascarados
     return NextResponse.json({
       colaborador: colaboradorParaTela(colaborador),
-      dependentes: (dependentes ?? []).map(dependenteParaTela),
+      dependentes: (dependentes ?? []).map((d) => dependenteParaTela({ ...d, passou_facial_em: passagens.get(d.id) ?? null })),
       // PD-04: sem aceite da versão atual, a tela mostra o termo e bloqueia câmera/galeria/envio
       termo: { versao: TERMO_VERSAO, aceito: await termoAceito(colaborador.id) },
     })

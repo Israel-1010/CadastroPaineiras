@@ -77,6 +77,8 @@ export interface Dependente {
   foto_enviada_em?: string | null
   /** "colaborador" quando o último envio foi feito pelo próprio colaborador; a carga do admin não preenche */
   foto_enviada_por?: string | null
+  /** Primeira passagem pelo facial depois do envio da foto atual: a partir daí o colaborador não troca a foto */
+  passou_facial_em?: string | null
 }
 
 export interface Admin {

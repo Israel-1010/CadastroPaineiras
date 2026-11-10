@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Award as IdCard, Users, Send, Loader2, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react"
+import { Calendar, Award as IdCard, Users, Send, Loader2, CheckCircle2, AlertCircle, ShieldCheck, DoorOpen } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { NovoDependenteModal } from "@/components/novo-dependente-modal"
 import { PhotoUpload } from "@/components/photo-upload"
@@ -45,7 +45,9 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
   const formatDateTime = (iso: string) => {
     const d = new Date(iso)
     if (Number.isNaN(d.getTime())) return ""
-    return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    return d
+      .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      .replace(", ", " às ")
   }
 
   const getInitials = (name: string) =>
@@ -110,6 +112,16 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
       })
       setAceito(false)
       setTermoAberto(true)
+      return
+    }
+    if (json?.passou_facial_em) {
+      // Passou pelo facial enquanto a tela estava aberta: trava o cartão e descarta a foto escolhida
+      descartarPendente(dependente.id)
+      setEnvio((prev) => {
+        const { [dependente.id]: _, ...resto } = prev
+        return resto
+      })
+      handleSaveDependente({ ...dependente, passou_facial_em: json.passou_facial_em })
       return
     }
     if (json?.dependente) handleSaveDependente({ ...dependente, ...json.dependente })
@@ -230,6 +242,17 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                 </div>
 
                 <div className="pt-2 space-y-2">
+                  {/* Já passou pelo facial com a foto atual: sem câmera, galeria nem envio */}
+                  {dependente.passou_facial_em ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                      <DoorOpen className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium">Passou pelo facial em {formatDateTime(dependente.passou_facial_em)}</p>
+                        <p className="text-green-700">A foto já foi usada na entrada e não pode mais ser trocada.</p>
+                      </div>
+                    </div>
+                  ) : (
+                  <>
                   {dependente.foto_url || pendente[dependente.id] ? (
                     <p className="text-xs text-[var(--muted-foreground)]">Trocar foto:</p>
                   ) : (
@@ -311,6 +334,8 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                     <p className="flex items-start gap-1.5 text-sm text-red-600">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {envio[dependente.id].mensagem}
                     </p>
+                  )}
+                  </>
                   )}
                 </div>
               </CardContent>

@@ -7,6 +7,7 @@ import { dependenteParaTela } from "@/lib/mascara"
 import { termoAceito, termoPendente } from "@/lib/aceite"
 import { registrarEnvio } from "@/lib/log-envios"
 import { deleteObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
+import { dataHoraBrasilia, passagensDepoisDoEnvio } from "@/lib/passagens"
 
 export const runtime = "nodejs"
 
@@ -23,6 +24,7 @@ const MSG_SEM_CONEXAO = "Não foi possível conectar às catracas agora. Tente e
  * - body {}: reenvia a foto já salva.
  * Grava em foto_aceita/foto_enviada_em o resultado, para o cartão mostrar "Foto enviada".
  * Catracas inacessíveis não contam como recusa: nada muda e a foto nova é mantida para tentar de novo.
+ * Depois que o dependente passa pelo facial com a foto atual (tabela passages), responde 409 e não envia.
  */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -36,12 +38,25 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const { data: dependente, error: findError } = await supabaseAdmin
       .from("dependentes")
-      .select("id, cpf, nome_completo, foto_url")
+      .select("id, cpf, nome_completo, foto_url, foto_enviada_em")
       .eq("id", params.id)
       .eq("colaborador_id", colaboradorId)
       .maybeSingle()
     if (findError) throw new Error(findError.message)
     if (!dependente) return NextResponse.json({ error: "Dependente não encontrado" }, { status: 404 })
+
+    // Já passou pelo facial com a foto atual: o colaborador não troca nem reenvia mais
+    const passouEm = (await passagensDepoisDoEnvio([dependente])).get(dependente.id)
+    if (passouEm) {
+      return NextResponse.json(
+        {
+          error: `Este dependente já passou pelo facial em ${dataHoraBrasilia(passouEm)}. A foto não pode mais ser trocada. Se precisar, procure o RH.`,
+          passou_facial_em: passouEm,
+          descartada: false,
+        },
+        { status: 409 },
+      )
+    }
 
     const novaFoto = Boolean(fotoUrlBody) && fotoUrlBody !== dependente.foto_url
     const fotoUrl = novaFoto ? fotoUrlBody : dependente.foto_url
