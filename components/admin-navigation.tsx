@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { Baby, BarChart3, DoorOpen, ScanFace, Settings, Users, type LucideIcon } from "lucide-react"
+import { Baby, BarChart3, DoorOpen, History, ScanFace, Settings, Users, type LucideIcon } from "lucide-react"
 import { pode, type Perfil, type Permissao } from "@/lib/permissoes"
 
 export function AdminNavigation({ perfil }: { perfil: Perfil }) {
@@ -46,6 +46,15 @@ export function AdminNavigation({ perfil }: { perfil: Perfil }) {
       color: "bg-rose-50 border-rose-200",
       permissao: "facial",
       action: () => router.push("/admin/facial"),
+    },
+    {
+      title: "Histórico de Fotos",
+      description: "Quem enviou, quando e se a catraca aceitou, com as fotos",
+      icon: History,
+      iconColor: "text-violet-600",
+      color: "bg-violet-50 border-violet-200",
+      permissao: "facial",
+      action: () => router.push("/admin/envios"),
     },
     {
       title: "Dashboard de Acessos",

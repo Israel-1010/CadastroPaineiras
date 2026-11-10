@@ -6,7 +6,7 @@ import { ORIENTACAO_FOTO } from "@/lib/mensagens"
 import { dependenteParaTela } from "@/lib/mascara"
 import { termoAceito, termoPendente } from "@/lib/aceite"
 import { registrarEnvio } from "@/lib/log-envios"
-import { deleteObject, isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
+import { isOwnPhotoUrl, photoKeyFromUrl } from "@/lib/s3"
 import { dataHoraBrasilia, passagensDepoisDoEnvio } from "@/lib/passagens"
 
 export const runtime = "nodejs"
@@ -20,7 +20,8 @@ const MSG_SEM_CONEXAO = "Não foi possível conectar às catracas agora. Tente e
 // O colaborador NÃO altera dados do dependente (nome, CPF, parentesco...): só envia a foto.
 /**
  * Envia a foto do dependente às catracas (cartão na tela inicial).
- * - body { foto_url }: foto nova; só é gravada no banco se o facial aceitar (se recusar, o arquivo é apagado).
+ * - body { foto_url }: foto nova; só vira a foto do dependente se o facial aceitar. Recusada, o arquivo fica
+ *   guardado só para o Histórico de Fotos do admin (ver por que a catraca recusou); o cartão pede outra foto.
  * - body {}: reenvia a foto já salva.
  * Grava em foto_aceita/foto_enviada_em o resultado, para o cartão mostrar "Foto enviada".
  * Catracas inacessíveis não contam como recusa: nada muda e a foto nova é mantida para tentar de novo.
@@ -92,7 +93,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: MSG_SEM_CONEXAO, descartada: false }, { status: 503 })
     }
     if (resultado === "erro_foto") {
-      if (novaFoto) await deleteObject(key)
       return NextResponse.json(
         { error: "Não foi possível processar esta foto. Tire outra foto e tente de novo.", descartada: novaFoto },
         { status: 502 },
@@ -100,7 +100,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
     // O facial recusou. Nada é removido antes do envio: se a foto anterior já estava aceita, ela continua valendo
     if (resultado === "recusada") {
-      if (novaFoto) await deleteObject(key)
       if (dependente.foto_aceita === true) {
         return NextResponse.json(
           { error: `${MSG_RECUSADA} A foto anterior continua valendo nas catracas.`, descartada: novaFoto },

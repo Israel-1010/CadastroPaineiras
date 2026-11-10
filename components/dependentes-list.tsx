@@ -126,7 +126,7 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
     }
     if (json?.dependente) handleSaveDependente({ ...dependente, ...json.dependente })
     if (!resp?.ok) {
-      // Recusada: o servidor já apagou o arquivo novo, então é preciso tirar outra
+      // Recusada: a foto não vale mais para envio (fica só no histórico do admin), então é preciso tirar outra
       if (json?.descartada) descartarPendente(dependente.id)
       const mensagem =
         resp?.status === 401

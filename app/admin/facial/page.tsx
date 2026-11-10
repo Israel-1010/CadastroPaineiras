@@ -1,6 +1,7 @@
+import Link from "next/link"
+import { History } from "lucide-react"
 import { CargaFacial } from "@/components/carga-facial"
 import { RemoverCatracas } from "@/components/remover-catracas"
-import { HistoricoEnvios } from "@/components/historico-envios"
 
 export default function CargaFacialPage() {
   return (
@@ -15,9 +16,16 @@ export default function CargaFacialPage() {
         <div className="mt-6">
           <RemoverCatracas />
         </div>
-        <div className="mt-6">
-          <HistoricoEnvios />
-        </div>
+        {/* O histórico completo (com as fotos) fica em página própria */}
+        <Link
+          href="/admin/envios"
+          className="mt-6 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-slate-700 hover:shadow-md transition-shadow"
+        >
+          <History className="w-5 h-5 text-violet-600" />
+          <span>
+            <span className="font-medium text-slate-900">Histórico de Fotos</span> · quem enviou, quando e se a catraca aceitou, com as fotos
+          </span>
+        </Link>
       </div>
     </div>
   )
