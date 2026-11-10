@@ -7,11 +7,22 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { CheckCircle2, Loader2, Save } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2, Save } from "lucide-react"
 import { isValidCPF, maskCPFInput, onlyDigits } from "@/lib/cpf"
-import { DEPENDENCIA_LABEL, DEPENDENCIAS, GENEROS } from "@/lib/types"
+import { DEPENDENCIA_LABEL, DEPENDENCIAS, GENEROS, normalizeDependencia } from "@/lib/types"
 
 type ColaboradorResumo = { id: string; re: string; nome_completo: string }
+
+/** Dependente que o admin vai editar (sem ele, o formulário cadastra um novo) */
+export type DependenteEdicao = {
+  id: string
+  nome_completo: string
+  cpf: string
+  genero: string
+  dependencia: string
+  data_nascimento: string
+  colaborador: { re: string; nome_completo: string } | null
+}
 
 // Mesmo critério da importação: parentesco que já indica o gênero preenche o campo
 const GENERO_POR_DEPENDENCIA: Record<string, string> = {
@@ -25,14 +36,31 @@ const GENERO_POR_DEPENDENCIA: Record<string, string> = {
 
 const VAZIO = { re: "", nome_completo: "", cpf: "", genero: "", dependencia: "", data_nascimento: "" }
 
+/** Valores do banco -> valores do formulário (o cadastro antigo tem "feminino", "conjuge"...) */
+function formDe(d: DependenteEdicao | null | undefined) {
+  if (!d) return VAZIO
+  const dep = normalizeDependencia(d.dependencia)
+  return {
+    re: d.colaborador?.re ?? "",
+    nome_completo: d.nome_completo,
+    cpf: maskCPFInput(onlyDigits(d.cpf).padStart(11, "0")),
+    genero: GENEROS.find((g) => g.toLowerCase() === String(d.genero ?? "").trim().toLowerCase()) ?? "",
+    dependencia: (DEPENDENCIAS as readonly string[]).includes(dep) ? dep : "",
+    data_nascimento: String(d.data_nascimento ?? "").slice(0, 10),
+  }
+}
+
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Preenchido = edição; vazio = cadastro */
+  dependente?: DependenteEdicao | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onCreated: (dependente: any) => void
+  onSaved: (dependente: any, aviso?: string) => void
 }
 
-export function NovoDependenteAdminDialog({ open, onOpenChange, onCreated }: Props) {
+export function DependenteAdminDialog({ open, onOpenChange, dependente, onSaved }: Props) {
+  const edicao = Boolean(dependente)
   const [form, setForm] = useState(VAZIO)
   const [colaboradores, setColaboradores] = useState<ColaboradorResumo[] | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -49,10 +77,10 @@ export function NovoDependenteAdminDialog({ open, onOpenChange, onCreated }: Pro
 
   useEffect(() => {
     if (open) {
-      setForm(VAZIO)
+      setForm(formDe(dependente))
       setErro(null)
     }
-  }, [open])
+  }, [open, dependente])
 
   const colaborador = useMemo(
     () => colaboradores?.find((c) => c.re.trim() === form.re.trim()) ?? null,
@@ -65,6 +93,8 @@ export function NovoDependenteAdminDialog({ open, onOpenChange, onCreated }: Pro
     setForm((f) => ({ ...f, dependencia: valor, genero: GENERO_POR_DEPENDENCIA[valor] ?? f.genero }))
 
   const completo = Object.values(form).every((v) => v.trim())
+  // O CPF é a identificação da pessoa nas catracas
+  const cpfMudou = edicao && onlyDigits(form.cpf) !== onlyDigits(dependente!.cpf).padStart(11, "0")
 
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,15 +105,15 @@ export function NovoDependenteAdminDialog({ open, onOpenChange, onCreated }: Pro
     setSalvando(true)
     setErro(null)
     try {
-      const resp = await fetch("/api/admin/dependentes", {
-        method: "POST",
+      const resp = await fetch(edicao ? `/api/admin/dependentes/${dependente!.id}` : "/api/admin/dependentes", {
+        method: edicao ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, re: form.re.trim(), cpf: onlyDigits(form.cpf) }),
       })
       const json = await resp.json().catch(() => ({}))
       if (resp.status === 401) throw new Error("Sessão expirada. Faça login novamente.")
-      if (!resp.ok) throw new Error(json?.error || "Erro ao cadastrar dependente")
-      onCreated(json.dependente)
+      if (!resp.ok) throw new Error(json?.error || (edicao ? "Erro ao salvar as alterações" : "Erro ao cadastrar dependente"))
+      onSaved(json.dependente, json.aviso)
       onOpenChange(false)
     } catch (err) {
       setErro((err as Error).message)
@@ -96,8 +126,10 @@ export function NovoDependenteAdminDialog({ open, onOpenChange, onCreated }: Pro
     <Dialog open={open} onOpenChange={(v) => !salvando && onOpenChange(v)}>
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Novo dependente</DialogTitle>
-          <DialogDescription>A foto é tirada depois pelo colaborador, na tela dele.</DialogDescription>
+          <DialogTitle>{edicao ? "Editar dependente" : "Novo dependente"}</DialogTitle>
+          <DialogDescription>
+            {edicao ? "A foto continua a mesma; só os dados mudam." : "A foto é tirada depois pelo colaborador, na tela dele."}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={salvar} className="space-y-4">
@@ -141,6 +173,12 @@ export function NovoDependenteAdminDialog({ open, onOpenChange, onCreated }: Pro
               />
             </div>
           </div>
+          {cpfMudou && (
+            <p className="flex items-start gap-1.5 text-sm text-amber-700">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              O CPF identifica a pessoa na catraca. Ao salvar, a face sai do CPF antigo e a foto é enviada de novo com o CPF novo.
+            </p>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -189,7 +227,7 @@ export function NovoDependenteAdminDialog({ open, onOpenChange, onCreated }: Pro
               {salvando ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</>
               ) : (
-                <><Save className="w-4 h-4 mr-2" /> Cadastrar</>
+                <><Save className="w-4 h-4 mr-2" /> {edicao ? "Salvar alterações" : "Cadastrar"}</>
               )}
             </Button>
           </DialogFooter>

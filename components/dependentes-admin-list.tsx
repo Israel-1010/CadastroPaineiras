@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2, Clock3, Loader2, Eye, EyeOff, UserPlus } from "lucide-react"
-import { NovoDependenteAdminDialog } from "@/components/novo-dependente-admin-dialog"
+import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2, Clock3, Loader2, Eye, EyeOff, UserPlus, Pencil } from "lucide-react"
+import { DependenteAdminDialog } from "@/components/dependente-admin-dialog"
 import { pode, type Perfil } from "@/lib/permissoes"
 import { formatCPF, maskCPF, onlyDigits } from "@/lib/cpf"
 import { DEPENDENCIA_LABEL, DEPENDENCIAS, dependenciaLabel, normalizeDependencia } from "@/lib/types"
@@ -44,6 +44,7 @@ export function DependentesAdminList() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showCPF, setShowCPF] = useState(false)
   const [novoAberto, setNovoAberto] = useState(false)
+  const [editando, setEditando] = useState<Dependente | null>(null)
   const [perfil, setPerfil] = useState<Perfil>("admin")
   const [mensagem, setMensagem] = useState<string | null>(null)
   const router = useRouter()
@@ -214,14 +215,24 @@ export function DependentesAdminList() {
         </p>
       )}
 
-      <NovoDependenteAdminDialog
-        open={novoAberto}
-        onOpenChange={setNovoAberto}
-        onCreated={(novo: Dependente) => {
+      <DependenteAdminDialog
+        open={novoAberto || Boolean(editando)}
+        dependente={editando}
+        onOpenChange={(aberto) => {
+          if (aberto) return
+          setNovoAberto(false)
+          setEditando(null)
+        }}
+        onSaved={(salvo: Dependente, aviso?: string) => {
+          if (editando) {
+            setDependentes((prev) => prev.map((dep) => (dep.id === salvo.id ? salvo : dep)))
+            setMensagem(`Dados de ${salvo.nome_completo} salvos.${aviso ? ` ${aviso}` : ""}`)
+            return
+          }
           setDependentes((prev) =>
-            [...prev, novo].sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, "pt-BR")),
+            [...prev, salvo].sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, "pt-BR")),
           )
-          setMensagem(`${novo.nome_completo} cadastrado(a) para ${novo.colaborador?.nome_completo ?? "o colaborador"}.`)
+          setMensagem(`${salvo.nome_completo} cadastrado(a) para ${salvo.colaborador?.nome_completo ?? "o colaborador"}.`)
         }}
       />
 
@@ -400,8 +411,13 @@ export function DependentesAdminList() {
                   </span>
                 </div>
 
+                <div className="flex gap-2 pt-2">
+                {pode(perfil, "cadastro") && (
+                  <Button variant="outline" size="sm" onClick={() => setEditando(dependente)}>
+                    <Pencil className="w-4 h-4 mr-2" /> Editar
+                  </Button>
+                )}
                 {pode(perfil, "presenca") && (
-                <div className="flex space-x-2 pt-2">
                   <Button
                     variant={dependente.presenca_confirmada ? "outline" : "default"}
                     size="sm"
@@ -426,8 +442,8 @@ export function DependentesAdminList() {
                       </>
                     )}
                   </Button>
-                </div>
                 )}
+                </div>
               </CardContent>
             </Card>
           ))}
