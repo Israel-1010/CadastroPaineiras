@@ -13,9 +13,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { ArrowLeft, Download, Loader2, LogIn, LogOut, RefreshCw, Search } from "lucide-react"
+import { ArrowLeft, Download, FileSpreadsheet, FileText, Loader2, LogIn, LogOut, RefreshCw, Search } from "lucide-react"
 import { formatCPF } from "@/lib/cpf"
 import type { Acesso, Apto, Pessoa, Sentido, TipoPessoa } from "@/lib/acessos"
+import type { RelatorioAcessos, Tabela } from "@/lib/relatorio-acessos"
 
 type Resposta = {
   periodo: { de: string; ate: string }
@@ -75,7 +76,8 @@ function perfilDe(p: Pessoa, emIso: string): Perfil {
   return p.genero === "Masculino" ? "homem" : p.genero === "Feminino" ? "mulher" : "sem_info"
 }
 
-function baixarCsv(nome: string, linhas: Array<Array<string | number | null>>) {
+function baixarCsv(nome: string, t: Tabela) {
+  const linhas = [t.colunas, ...t.linhas]
   const csv = linhas.map((l) => l.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n")
   const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }))
   const a = document.createElement("a")
@@ -143,6 +145,7 @@ export function DashboardAcessos() {
   const [dados, setDados] = useState<Resposta | null>(null)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null)
 
   const carregar = useCallback(
     async (periodo?: { de: string; ate: string }) => {
@@ -278,7 +281,8 @@ export function DashboardAcessos() {
     ultima: string
     catracas: Set<string>
   }
-  const listaPessoas = useMemo(() => {
+  // Sem a busca: base das exportações (a busca só filtra o que aparece na tela)
+  const pessoasTodas = useMemo(() => {
     if (!dados) return []
     const m = new Map<string, LinhaPessoa>()
     for (const a of filtrados) {
@@ -297,15 +301,14 @@ export function DashboardAcessos() {
       l.catracas.add(a.catraca)
       m.set(a.p, l)
     }
-    return [...m.values()].filter((l) => casa(l.pessoa)).sort((a, b) => b.ultima.localeCompare(a.ultima))
-  }, [filtrados, dados, casa])
+    return [...m.values()].sort((a, b) => b.ultima.localeCompare(a.ultima))
+  }, [filtrados, dados])
+  const listaPessoas = useMemo(() => pessoasTodas.filter((l) => casa(l.pessoa)), [pessoasTodas, casa])
 
   const linhaDoTempo = useMemo(() => (dados ? filtrados.filter((a) => casa(dados.pessoas[a.p])) : []), [filtrados, dados, casa])
 
-  const naoEntraram = useMemo(() => {
-    if (!dados) return []
-    return dados.aptos.filter((ap) => !resumo.entraram.has(ap.p) && casa(ap))
-  }, [dados, resumo, casa])
+  const naoEntraramTodos = useMemo(() => (dados ? dados.aptos.filter((ap) => !resumo.entraram.has(ap.p)) : []), [dados, resumo])
+  const naoEntraram = useMemo(() => naoEntraramTodos.filter((ap) => casa(ap)), [naoEntraramTodos, casa])
 
   const fmt = umDia ? hora : diaHora
   const identificacao = (p: Pessoa) => (p.cpf ? formatCPF(p.cpf) : p.re ? `RE ${p.re}` : "—")
@@ -313,33 +316,113 @@ export function DashboardAcessos() {
   const situacao = (chave: string) =>
     resumo.ultimo.get(chave) === "entrada" ? (incluiHoje ? "No clube" : "Sem saída registrada") : "Saiu"
 
+  // Linhas das listas (as mesmas no CSV e no Excel)
+  const dataHoraCompleta = (iso: string | null) => (iso ? `${dataBR(local(iso).slice(0, 10))} ${hora(iso)}` : "")
+  const tabelaPessoas = (linhas: LinhaPessoa[]): Tabela => ({
+    colunas: ["Nome", "Tipo", "CPF", "RE", "Parentesco", "Sexo", "Idade", "Colaborador", "RE do colaborador", "Entradas", "Saídas", "Primeira entrada", "Última saída", "Situação"],
+    linhas: linhas.map((l) => [
+      l.pessoa.nome, TIPO_SINGULAR[l.pessoa.tipo], l.pessoa.cpf ? formatCPF(l.pessoa.cpf) : "", l.pessoa.re ?? "",
+      l.pessoa.dependencia ?? "", l.pessoa.genero ?? "", idadeEm(l.pessoa.nascimento, l.primeira) ?? "",
+      l.pessoa.colaborador?.nome ?? "", l.pessoa.colaborador?.re ?? "",
+      l.entradas, l.saidas, dataHoraCompleta(l.primeiraEntrada), dataHoraCompleta(l.ultimaSaida), situacao(l.chave),
+    ]),
+  })
+  const tabelaLinha = (acessos: Acesso[]): Tabela => ({
+    colunas: ["Data e hora", "Sentido", "Nome", "Tipo", "CPF", "RE", "Colaborador", "Catraca", "Similaridade", "Leituras"],
+    linhas: acessos.map((a) => {
+      const p = dados!.pessoas[a.p]
+      return [dataHoraCompleta(a.em), SENTIDO_LABEL[a.sentido], p.nome, TIPO_SINGULAR[p.tipo], p.cpf ? formatCPF(p.cpf) : "", p.re ?? "", p.colaborador ? responsavel(p.colaborador) : "", nomeCatraca(a.catraca), a.similaridade ?? "", a.leituras]
+    }),
+  })
+  const tabelaNao = (aptos: Apto[]): Tabela => ({
+    colunas: ["Nome", "CPF", "Parentesco", "Colaborador", "RE do colaborador"],
+    linhas: aptos.map((ap) => [ap.nome, formatCPF(ap.cpf), ap.dependencia, ap.colaborador?.nome ?? "", ap.colaborador?.re ?? ""]),
+  })
+
   function exportar() {
     if (!dados) return
     const periodo = umDia ? dados.periodo.de : `${dados.periodo.de}_a_${dados.periodo.ate}`
-    const dataHoraCompleta = (iso: string | null) => (iso ? `${dataBR(local(iso).slice(0, 10))} ${hora(iso)}` : "")
-    if (aba === "pessoas") {
-      baixarCsv(`acessos-pessoas-${periodo}.csv`, [
-        ["Nome", "Tipo", "CPF", "RE", "Parentesco", "Sexo", "Idade", "Colaborador", "RE do colaborador", "Entradas", "Saídas", "Primeira entrada", "Última saída", "Situação"],
-        ...listaPessoas.map((l) => [
-          l.pessoa.nome, TIPO_SINGULAR[l.pessoa.tipo], l.pessoa.cpf ? formatCPF(l.pessoa.cpf) : "", l.pessoa.re ?? "",
-          l.pessoa.dependencia ?? "", l.pessoa.genero ?? "", idadeEm(l.pessoa.nascimento, l.primeira) ?? "",
-          l.pessoa.colaborador?.nome ?? "", l.pessoa.colaborador?.re ?? "",
-          l.entradas, l.saidas, dataHoraCompleta(l.primeiraEntrada), dataHoraCompleta(l.ultimaSaida), situacao(l.chave),
-        ]),
-      ])
-    } else if (aba === "linha") {
-      baixarCsv(`acessos-linha-do-tempo-${periodo}.csv`, [
-        ["Data e hora", "Sentido", "Nome", "Tipo", "CPF", "RE", "Colaborador", "Catraca", "Similaridade", "Leituras"],
-        ...linhaDoTempo.map((a) => {
-          const p = dados.pessoas[a.p]
-          return [dataHoraCompleta(a.em), SENTIDO_LABEL[a.sentido], p.nome, TIPO_SINGULAR[p.tipo], p.cpf ? formatCPF(p.cpf) : "", p.re ?? "", p.colaborador ? responsavel(p.colaborador) : "", nomeCatraca(a.catraca), a.similaridade ?? "", a.leituras]
-        }),
-      ])
-    } else {
-      baixarCsv(`dependentes-que-nao-entraram-${periodo}.csv`, [
-        ["Nome", "CPF", "Parentesco", "Colaborador", "RE do colaborador"],
-        ...naoEntraram.map((ap) => [ap.nome, formatCPF(ap.cpf), ap.dependencia, ap.colaborador?.nome ?? "", ap.colaborador?.re ?? ""]),
-      ])
+    if (aba === "pessoas") baixarCsv(`acessos-pessoas-${periodo}.csv`, tabelaPessoas(listaPessoas))
+    else if (aba === "linha") baixarCsv(`acessos-linha-do-tempo-${periodo}.csv`, tabelaLinha(linhaDoTempo))
+    else baixarCsv(`dependentes-que-nao-entraram-${periodo}.csv`, tabelaNao(naoEntraram))
+  }
+
+  /**
+   * Pessoas no clube ao fim de cada hora: última passagem até ali foi pela entrada
+   * (mesma regra do "No clube agora"; usa as duas catracas, só com o filtro de tipo)
+   */
+  function dentroPorHora() {
+    const asc = [...doTipo].sort((a, b) => a.em.localeCompare(b.em))
+    const ultimo = new Map<string, Sentido>()
+    const porRotulo = new Map<string, number>()
+    let i = 0
+    for (const g of grafico) {
+      const h = g.rotulo.slice(0, 2)
+      while (i < asc.length && local(asc[i].em).slice(11, 13) <= h) {
+        ultimo.set(asc[i].p, asc[i].sentido)
+        i++
+      }
+      porRotulo.set(g.rotulo, [...ultimo.values()].filter((s) => s === "entrada").length)
+    }
+    return porRotulo
+  }
+
+  /** Relatório com os filtros de tipo e catraca da tela (a busca não entra) */
+  function montarRelatorio(): RelatorioAcessos {
+    const d = dados!
+    const agora = new Date().toISOString()
+    const dentro = umDia ? dentroPorHora() : null
+    return {
+      periodo: periodoTexto,
+      filtros: [
+        ...(tipo !== "todos" ? [`Tipo: ${TIPO_LABEL[tipo]}`] : []),
+        ...(catraca !== "todas" ? [`Catraca: ${nomeCatraca(catraca)}`] : []),
+      ],
+      geradoEm: `${dataBR(local(agora).slice(0, 10))} às ${local(agora).slice(11, 16)}`,
+      nomeArquivo: `acessos-${umDia ? d.periodo.de : `${d.periodo.de}_a_${d.periodo.ate}`}`,
+      porHora: umDia,
+      movimento: {
+        entradas: resumo.entradas,
+        saidas: resumo.saidas,
+        pessoas: resumo.pessoas,
+        dentro: resumo.dentro,
+        dentroRotulo: incluiHoje ? "No clube agora" : "Sem saída registrada",
+        leituras: resumo.leituras,
+      },
+      porTipo: [
+        { rotulo: "Dependentes", valor: resumo.porTipo.dependente.size },
+        { rotulo: "Colaboradores", valor: resumo.porTipo.colaborador.size },
+        { rotulo: "Outros", valor: resumo.porTipo.outro.size, detalhe: "fora do cadastro" },
+      ],
+      perfil: [
+        { rotulo: PERFIL_LABEL.homem, valor: resumo.perfil.homem },
+        { rotulo: PERFIL_LABEL.mulher, valor: resumo.perfil.mulher },
+        { rotulo: PERFIL_LABEL.crianca, valor: resumo.perfil.crianca, detalhe: `até ${IDADE_CRIANCA - 1} anos` },
+        { rotulo: PERFIL_LABEL.sem_info, valor: resumo.perfil.sem_info, detalhe: "colaboradores e outros" },
+      ],
+      catracas: porCatraca.map(([ip, { n }]) => ({ rotulo: nomeCatraca(ip), valor: n, detalhe: nomeCatraca(ip) !== ip ? ip : undefined })),
+      aptos: { total: resumo.aptos, entraram: resumo.aptosQueEntraram },
+      grafico: grafico.map((g) => ({ rotulo: g.rotulo, entrada: g.entrada, saida: g.saida, dentro: dentro?.get(g.rotulo) })),
+      pessoas: tabelaPessoas(pessoasTodas),
+      linhaDoTempo: tabelaLinha(filtrados),
+      naoEntraram: tabelaNao(naoEntraramTodos),
+    }
+  }
+
+  async function exportarRelatorio(formato: "pdf" | "excel") {
+    if (!dados) return
+    setExportando(formato)
+    setErro(null)
+    try {
+      const relatorio = montarRelatorio()
+      // Carrega a biblioteca só quando o botão é usado
+      if (formato === "pdf") await (await import("@/lib/relatorio-acessos-pdf")).gerarPdfAcessos(relatorio)
+      else await (await import("@/lib/relatorio-acessos-excel")).gerarExcelAcessos(relatorio)
+    } catch (e) {
+      console.error("[dashboard-acessos] exportação falhou:", e)
+      setErro(`Não foi possível gerar o ${formato === "pdf" ? "PDF" : "Excel"}. Tente de novo.`)
+    } finally {
+      setExportando(null)
     }
   }
 
@@ -353,9 +436,21 @@ export function DashboardAcessos() {
 
   return (
     <div className="space-y-6">
-      <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
-        <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
-      </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
+        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => exportarRelatorio("pdf")} disabled={!dados || exportando !== null} className="bg-pink-600 hover:bg-pink-700 text-white">
+            {exportando === "pdf" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+            PDF para diretoria
+          </Button>
+          <Button variant="outline" onClick={() => exportarRelatorio("excel")} disabled={!dados || exportando !== null}>
+            {exportando === "excel" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileSpreadsheet className="w-4 h-4 mr-2" />}
+            Excel
+          </Button>
+        </div>
+      </div>
 
       {/* Filtros: acima de tudo */}
       <Card className="bg-white border-slate-200">
@@ -621,7 +716,7 @@ export function DashboardAcessos() {
                       return (
                         <li key={l.chave} className="px-3 py-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <p className="font-medium text-slate-800">
+                            <div className="font-medium text-slate-800">
                               {l.pessoa.nome}{" "}
                               <Badge variant="outline" className="ml-1 font-normal">
                                 {l.pessoa.dependencia ?? TIPO_SINGULAR[l.pessoa.tipo]}
@@ -629,7 +724,7 @@ export function DashboardAcessos() {
                               {!l.pessoa.cadastrado && l.pessoa.tipo !== "outro" && (
                                 <span className="ml-1 text-xs text-amber-700">fora do cadastro</span>
                               )}
-                            </p>
+                            </div>
                             <p className="text-xs text-slate-500">
                               {identificacao(l.pessoa)}
                               {l.pessoa.colaborador && <> · de {responsavel(l.pessoa.colaborador)}</>}
@@ -692,12 +787,12 @@ export function DashboardAcessos() {
                     <Lista vazio={naoEntraram.length === 0}>
                       {naoEntraram.slice(0, MAX_LINHAS).map((ap) => (
                         <li key={ap.p} className="px-3 py-2">
-                          <p className="font-medium text-slate-800">
+                          <div className="font-medium text-slate-800">
                             {ap.nome}{" "}
                             <Badge variant="outline" className="ml-1 font-normal">
                               {ap.dependencia}
                             </Badge>
-                          </p>
+                          </div>
                           <p className="text-xs text-slate-500">
                             {formatCPF(ap.cpf)} · de {responsavel(ap.colaborador)}
                           </p>
