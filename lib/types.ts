@@ -50,8 +50,10 @@ const LABEL_MASCULINO: Partial<Record<Dependencia, string>> = {
 
 export const dependenciaLabel = (value: string, genero?: string | null) => {
   const dep = normalizeDependencia(value) as Dependencia
-  if (genero === "Feminino" && LABEL_FEMININO[dep]) return LABEL_FEMININO[dep]!
-  if (genero === "Masculino" && LABEL_MASCULINO[dep]) return LABEL_MASCULINO[dep]!
+  // Alguns cadastros vieram com o sexo em minúsculas ("feminino")
+  const g = String(genero ?? "").trim().toLowerCase()
+  if (g === "feminino" && LABEL_FEMININO[dep]) return LABEL_FEMININO[dep]!
+  if (g === "masculino" && LABEL_MASCULINO[dep]) return LABEL_MASCULINO[dep]!
   return DEPENDENCIA_LABEL[dep] ?? value
 }
 

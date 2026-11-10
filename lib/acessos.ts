@@ -16,6 +16,8 @@ export type Passagem = {
   timestamp: string | null
   recorded_at: string | null
   device_ip: string | null
+  /** "Entry"/"Exit" informado pela catraca (as do evento mandam sempre "Entry": o sentido vem do IP) */
+  type?: string | null
 }
 
 export type DependenteBase = {
@@ -24,6 +26,7 @@ export type DependenteBase = {
   nome_completo: string
   dependencia: string
   genero: string | null
+  data_nascimento: string | null
   foto_aceita: boolean | null
   colaborador: { re: string; nome_completo: string } | null
 }
@@ -31,6 +34,8 @@ export type DependenteBase = {
 export type ColaboradorBase = { id: string; re: string; nome_completo: string }
 
 export type TipoPessoa = "dependente" | "colaborador" | "outro"
+export type Sentido = "entrada" | "saida"
+export type Genero = "Masculino" | "Feminino"
 
 export type Pessoa = {
   tipo: TipoPessoa
@@ -42,6 +47,9 @@ export type Pessoa = {
   colaborador: { nome: string; re: string } | null
   /** false quando a catraca conhece a pessoa mas o cadastro não (ex.: removida na atualização da planilha) */
   cadastrado: boolean
+  /** Só dependentes têm sexo e nascimento no cadastro (colaboradores não) */
+  genero: Genero | null
+  nascimento: string | null
 }
 
 export type Acesso = {
@@ -52,6 +60,7 @@ export type Acesso = {
   /** quantas leituras de rosto formaram este acesso */
   leituras: number
   catraca: string
+  sentido: Sentido
   similaridade: number | null
 }
 
@@ -75,15 +84,40 @@ export const normalizaRe = (re: string | null | undefined) => {
 
 export const normalizaIp = (ip: string | null | undefined) => (ip ?? "").replace(/^::ffff:/i, "").trim() || "—"
 
-/** CATRACAS_NOMES="12.0.0.83=Catraca 1;12.0.0.84=Catraca 2" */
-export function nomesCatracas(valor = process.env.CATRACAS_NOMES ?? ""): Record<string, string> {
-  const nomes: Record<string, string> = {}
+/** "ip=valor;ip=valor" -> { ip: valor } */
+function lerPares(valor: string): Record<string, string> {
+  const pares: Record<string, string> = {}
   for (const par of valor.split(/[;,]/)) {
     const [ip, ...resto] = par.split("=")
-    const nome = resto.join("=").trim()
-    if (ip?.trim() && nome) nomes[normalizaIp(ip)] = nome
+    const v = resto.join("=").trim()
+    if (ip?.trim() && v) pares[normalizaIp(ip)] = v
   }
-  return nomes
+  return pares
+}
+
+// Catracas do evento: a 192.168.9.74 é a entrada e a 192.168.9.75 é a saída
+const SENTIDO_PADRAO: Record<string, Sentido> = { "192.168.9.74": "entrada", "192.168.9.75": "saida" }
+const NOME_PADRAO: Record<string, string> = { "192.168.9.74": "Entrada", "192.168.9.75": "Saída" }
+
+/** CATRACAS_SENTIDO="192.168.9.74=entrada;192.168.9.75=saida" (substitui o padrão) */
+export function sentidosCatracas(valor = process.env.CATRACAS_SENTIDO ?? ""): Record<string, Sentido> {
+  const lidos = lerPares(valor)
+  const sentidos: Record<string, Sentido> = Object.keys(lidos).length ? {} : { ...SENTIDO_PADRAO }
+  for (const [ip, s] of Object.entries(lidos)) sentidos[ip] = /^sa/i.test(s) ? "saida" : "entrada"
+  return sentidos
+}
+
+/** CATRACAS_NOMES="12.0.0.83=Catraca 1;12.0.0.84=Catraca 2" (soma ao padrão: Entrada/Saída) */
+export function nomesCatracas(valor = process.env.CATRACAS_NOMES ?? ""): Record<string, string> {
+  return { ...NOME_PADRAO, ...lerPares(valor) }
+}
+
+/** "feminino" / "Masculino" / "F" -> Genero */
+export function normalizaGenero(g: string | null | undefined): Genero | null {
+  const v = String(g ?? "").trim().toLowerCase()
+  if (v.startsWith("f")) return "Feminino"
+  if (v.startsWith("m")) return "Masculino"
+  return null
 }
 
 /** CPF com os zeros à esquerda (a planilha às vezes os perde; a catraca guarda os 11 dígitos) */
@@ -114,13 +148,21 @@ function indicePorNome(colaboradores: ColaboradorBase[]) {
   return (nome: string | null) => (nome ? indice.get(chaveNome(nome)) ?? null : null)
 }
 
-export function montarAcessos(passagens: Passagem[], dependentes: DependenteBase[], colaboradores: ColaboradorBase[]) {
+export function montarAcessos(
+  passagens: Passagem[],
+  dependentes: DependenteBase[],
+  colaboradores: ColaboradorBase[],
+  sentidos: Record<string, Sentido> = sentidosCatracas(),
+) {
   const depPorCpf = new Map(dependentes.map((d) => [cpf11(d.cpf), d]))
   const colPorRe = new Map(colaboradores.map((c) => [normalizaRe(c.re), c]))
   const colPorNome = indicePorNome(colaboradores)
 
   const pessoas: Record<string, Pessoa> = {}
-  const leiturasPorPessoa = new Map<string, Array<{ t: number; em: string; catraca: string; sim: number | null }>>()
+  const leiturasPorPessoa = new Map<string, Array<{ t: number; em: string; catraca: string; sentido: Sentido; sim: number | null }>>()
+  // Sentido pelo IP da catraca; sem IP conhecido, vale o "type" informado por ela
+  const sentidoDe = (ps: Passagem): Sentido => sentidos[normalizaIp(ps.device_ip)] ?? (ps.type === "Exit" ? "saida" : "entrada")
+  const semPerfil = { genero: null, nascimento: null }
 
   for (const ps of passagens) {
     const em = ps.timestamp ?? ps.recorded_at
@@ -140,6 +182,8 @@ export function montarAcessos(passagens: Passagem[], dependentes: DependenteBase
         dependencia: dependenciaLabel(dep.dependencia, dep.genero),
         colaborador: dep.colaborador ? { nome: dep.colaborador.nome_completo, re: dep.colaborador.re } : null,
         cadastrado: true,
+        genero: normalizaGenero(dep.genero),
+        nascimento: dep.data_nascimento?.slice(0, 10) || null,
       }
     } else if (PREFIXO_COLABORADOR.test(card)) {
       const re = normalizaRe(card.slice(1))
@@ -153,6 +197,7 @@ export function montarAcessos(passagens: Passagem[], dependentes: DependenteBase
         dependencia: null,
         colaborador: null,
         cadastrado: Boolean(col),
+        ...semPerfil,
       }
     } else if (colPorNome(ps.user_name)) {
       const col = colPorNome(ps.user_name)!
@@ -165,6 +210,7 @@ export function montarAcessos(passagens: Passagem[], dependentes: DependenteBase
         dependencia: null,
         colaborador: null,
         cadastrado: true,
+        ...semPerfil,
       }
     } else {
       const id = userId || card || ps.user_name || "?"
@@ -178,26 +224,28 @@ export function montarAcessos(passagens: Passagem[], dependentes: DependenteBase
         dependencia: null,
         colaborador: null,
         cadastrado: false,
+        ...semPerfil,
       }
     }
 
     const lista = leiturasPorPessoa.get(chave) ?? []
-    lista.push({ t: Date.parse(em), em, catraca: normalizaIp(ps.device_ip), sim: ps.similarity })
+    lista.push({ t: Date.parse(em), em, catraca: normalizaIp(ps.device_ip), sentido: sentidoDe(ps), sim: ps.similarity })
     leiturasPorPessoa.set(chave, lista)
   }
 
-  // Agrupa as leituras repetidas (a catraca lê o rosto várias vezes em poucos segundos)
+  // Agrupa as leituras repetidas (a catraca lê o rosto várias vezes em poucos segundos).
+  // Trocou de sentido (entrou e saiu em seguida) = acesso novo, mesmo dentro da janela
   const acessos: Acesso[] = []
   for (const [p, lista] of leiturasPorPessoa) {
     lista.sort((a, b) => a.t - b.t)
     let atual: Acesso | null = null
     let ultimaLeitura = 0
     for (const l of lista) {
-      if (atual && l.t - ultimaLeitura <= JANELA_ACESSO_MS) {
+      if (atual && atual.sentido === l.sentido && l.t - ultimaLeitura <= JANELA_ACESSO_MS) {
         atual.leituras++
         if (l.sim != null && (atual.similaridade == null || l.sim > atual.similaridade)) atual.similaridade = l.sim
       } else {
-        atual = { p, em: new Date(l.t).toISOString(), leituras: 1, catraca: l.catraca, similaridade: l.sim }
+        atual = { p, em: new Date(l.t).toISOString(), leituras: 1, catraca: l.catraca, sentido: l.sentido, similaridade: l.sim }
         acessos.push(atual)
       }
       ultimaLeitura = l.t

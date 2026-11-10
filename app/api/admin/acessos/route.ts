@@ -22,7 +22,7 @@ async function buscarPassagens(inicio: string, fim: string) {
   for (let from = 0; from < MAX_LEITURAS; from += 1000) {
     const { data, error } = await supabaseAdmin
       .from("passages")
-      .select("user_id, user_name, card_no, similarity, timestamp, recorded_at, device_ip")
+      .select("user_id, user_name, card_no, similarity, timestamp, recorded_at, device_ip, type")
       .gte("timestamp", inicio)
       .lte("timestamp", fim)
       .order("timestamp")
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       fetchAll<DependenteBase>((from, to) =>
         supabaseAdmin
           .from("dependentes")
-          .select("id, cpf, nome_completo, dependencia, genero, foto_aceita, colaborador:colaboradores(re, nome_completo)")
+          .select("id, cpf, nome_completo, dependencia, genero, data_nascimento, foto_aceita, colaborador:colaboradores(re, nome_completo)")
           .order("id")
           .range(from, to) as any,
       ),

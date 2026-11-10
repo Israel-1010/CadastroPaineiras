@@ -13,9 +13,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { ArrowLeft, Download, Loader2, RefreshCw, Search } from "lucide-react"
+import { ArrowLeft, Download, Loader2, LogIn, LogOut, RefreshCw, Search } from "lucide-react"
 import { formatCPF } from "@/lib/cpf"
-import type { Acesso, Apto, Pessoa, TipoPessoa } from "@/lib/acessos"
+import type { Acesso, Apto, Pessoa, Sentido, TipoPessoa } from "@/lib/acessos"
 
 type Resposta = {
   periodo: { de: string; ate: string }
@@ -29,17 +29,20 @@ type Resposta = {
   atualizadoEm: string
 }
 
-// Ordem de empilhamento (de baixo para cima) e cores fixas por tipo: a cor segue o tipo, nunca a posição
 const TIPOS: TipoPessoa[] = ["dependente", "colaborador", "outro"]
 const TIPO_LABEL: Record<TipoPessoa, string> = { dependente: "Dependentes", colaborador: "Colaboradores", outro: "Outros" }
 const TIPO_SINGULAR: Record<TipoPessoa, string> = { dependente: "Dependente", colaborador: "Colaborador", outro: "Outro" }
+const SENTIDO_LABEL: Record<Sentido, string> = { entrada: "Entrada", saida: "Saída" }
+
+// Cores fixas por sentido (a cor segue a série, nunca a posição)
 const chartConfig = {
-  dependente: { label: "Dependentes", color: "#2a78d6" },
-  colaborador: { label: "Colaboradores", color: "#eb6834" },
-  outro: { label: "Outros", color: "#1baf7a" },
+  entrada: { label: "Entradas", color: "#2a78d6" },
+  saida: { label: "Saídas", color: "#eb6834" },
 } satisfies ChartConfig
-const SUPERFICIE = "#ffffff"
+const COR_BARRA = "#2a78d6"
 const MAX_LINHAS = 300
+/** Criança: até 11 anos (ECA: criança é quem tem menos de 12 anos) */
+const IDADE_CRIANCA = 12
 
 // Horário de Brasília (sem horário de verão desde 2019)
 const FUSO_MS = 3 * 60 * 60 * 1000
@@ -51,6 +54,26 @@ const hora = (iso: string) => local(iso).slice(11, 19)
 const diaHora = (iso: string) => `${dataBR(local(iso).slice(0, 10)).slice(0, 5)} ${local(iso).slice(11, 16)}`
 
 const numero = (n: number) => n.toLocaleString("pt-BR")
+const pct = (n: number, total: number) => (total ? `${Math.round((n / total) * 100)}%` : "")
+
+/** Idade (anos completos) na data do acesso */
+function idadeEm(nascimento: string | null, iso: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(nascimento ?? "")
+  if (!m) return null
+  const [a, me, d] = local(iso).slice(0, 10).split("-").map(Number)
+  let idade = a - Number(m[1])
+  if (me < Number(m[2]) || (me === Number(m[2]) && d < Number(m[3]))) idade--
+  return idade
+}
+
+type Perfil = "homem" | "mulher" | "crianca" | "sem_info"
+const PERFIL_LABEL: Record<Perfil, string> = { homem: "Homens", mulher: "Mulheres", crianca: "Crianças", sem_info: "Sem informação" }
+function perfilDe(p: Pessoa, emIso: string): Perfil {
+  if (p.tipo !== "dependente") return "sem_info"
+  const idade = idadeEm(p.nascimento, emIso)
+  if (idade != null && idade < IDADE_CRIANCA) return "crianca"
+  return p.genero === "Masculino" ? "homem" : p.genero === "Feminino" ? "mulher" : "sem_info"
+}
 
 function baixarCsv(nome: string, linhas: Array<Array<string | number | null>>) {
   const csv = linhas.map((l) => l.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n")
@@ -60,20 +83,6 @@ function baixarCsv(nome: string, linhas: Array<Array<string | number | null>>) {
   a.download = nome
   a.click()
   URL.revokeObjectURL(url)
-}
-
-/** Segmento da coluna empilhada: só o de cima ganha a ponta arredondada de 4px */
-function segmento(tipo: TipoPessoa) {
-  return function Segmento(props: any) {
-    const { x, y, width, height, payload } = props
-    if (!height || height <= 0) return <g />
-
-    const temAcima = TIPOS.slice(TIPOS.indexOf(tipo) + 1).some((t) => payload[t] > 0)
-    const r = temAcima ? 0 : Math.min(4, height, width / 2)
-    const d = `M${x},${y + height} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + width - r},${y} Q${x + width},${y} ${x + width},${y + r} L${x + width},${y + height} Z`
-    // O traço na cor do fundo deixa 2px de respiro entre os segmentos
-    return <path d={d} fill={chartConfig[tipo].color} stroke={SUPERFICIE} strokeWidth={2} />
-  }
 }
 
 function Indicador({ titulo, valor, detalhe }: { titulo: string; valor: string; detalhe?: string }) {
@@ -88,7 +97,40 @@ function Indicador({ titulo, valor, detalhe }: { titulo: string; valor: string; 
   )
 }
 
-// PD-09: quem passou pelas catracas, quando e por qual catraca
+/** Linhas "rótulo ... valor (%)" com barra proporcional ao total */
+function Proporcoes({ linhas, total }: { linhas: Array<{ rotulo: string; valor: number; detalhe?: string }>; total: number }) {
+  return (
+    <ul className="space-y-3">
+      {linhas.map((l) => (
+        <li key={l.rotulo} title={`${l.rotulo}: ${numero(l.valor)}`}>
+          <div className="flex justify-between gap-2 text-sm">
+            <span className="text-slate-700">
+              {l.rotulo}
+              {l.detalhe && <span className="text-slate-500 text-xs"> · {l.detalhe}</span>}
+            </span>
+            <span className="font-medium text-slate-900 tabular-nums whitespace-nowrap">
+              {numero(l.valor)} <span className="text-slate-500 font-normal text-xs">{pct(l.valor, total)}</span>
+            </span>
+          </div>
+          <div className="mt-1 h-2 rounded bg-slate-100">
+            <div className="h-2 rounded" style={{ width: total ? `${(l.valor / total) * 100}%` : 0, background: COR_BARRA }} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function SentidoTag({ sentido }: { sentido: Sentido }) {
+  const Icone = sentido === "entrada" ? LogIn : LogOut
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-700">
+      <Icone className="w-3.5 h-3.5" /> {SENTIDO_LABEL[sentido]}
+    </span>
+  )
+}
+
+// PD-09: quem passou pelas catracas, quando, por qual catraca e em que sentido
 export function DashboardAcessos() {
   const router = useRouter()
   const [de, setDe] = useState("")
@@ -137,42 +179,57 @@ export function DashboardAcessos() {
 
   const nomeCatraca = useCallback((ip: string) => dados?.catracas[ip] ?? ip, [dados])
   const umDia = dados ? dados.periodo.de === dados.periodo.ate : true
+  const incluiHoje = dados ? dados.periodo.de <= hojeLocal() && hojeLocal() <= dados.periodo.ate : false
 
-  // Acessos depois dos filtros de tipo e catraca (valem para tudo: indicadores, gráfico e listas)
-  const filtrados = useMemo(() => {
+  // Só o filtro de tipo: base para "no clube agora" e "não entraram" (precisam dos dois sentidos)
+  const doTipo = useMemo(() => {
     if (!dados) return []
-    return dados.acessos.filter(
-      (a) => (tipo === "todos" || dados.pessoas[a.p]?.tipo === tipo) && (catraca === "todas" || a.catraca === catraca),
-    )
-  }, [dados, tipo, catraca])
+    return dados.acessos.filter((a) => tipo === "todos" || dados.pessoas[a.p]?.tipo === tipo)
+  }, [dados, tipo])
+
+  // Tipo + catraca: valem para indicadores, gráfico e listas
+  const filtrados = useMemo(() => doTipo.filter((a) => catraca === "todas" || a.catraca === catraca), [doTipo, catraca])
 
   const resumo = useMemo(() => {
-    const pessoas = new Set<string>()
+    const pessoas = new Map<string, string>() // pessoa -> primeiro acesso
     const porTipo: Record<TipoPessoa, Set<string>> = { dependente: new Set(), colaborador: new Set(), outro: new Set() }
+    let entradas = 0
+    let saidas = 0
     let leituras = 0
+    // acessos vêm do mais recente para o mais antigo: o último set fica com o primeiro acesso
     for (const a of filtrados) {
-      pessoas.add(a.p)
+      pessoas.set(a.p, a.em)
       porTipo[dados!.pessoas[a.p].tipo].add(a.p)
+      if (a.sentido === "entrada") entradas++
+      else saidas++
       leituras += a.leituras
     }
-    const aptos = dados?.aptos.length ?? 0
-    const aptosQuePassaram = dados?.aptos.filter((ap) => porTipo.dependente.has(ap.p)).length ?? 0
-    return { pessoas: pessoas.size, porTipo, leituras, aptos, aptosQuePassaram }
-  }, [filtrados, dados])
+    const perfil: Record<Perfil, number> = { homem: 0, mulher: 0, crianca: 0, sem_info: 0 }
+    for (const [p, em] of pessoas) perfil[perfilDe(dados!.pessoas[p], em)]++
 
-  // Colunas: por hora (um dia) ou por dia (período)
+    // Última passagem de cada pessoa (em qualquer catraca) foi pela entrada = está no clube
+    const ultimo = new Map<string, Sentido>()
+    for (const a of doTipo) if (!ultimo.has(a.p)) ultimo.set(a.p, a.sentido)
+    const dentro = [...ultimo.values()].filter((s) => s === "entrada").length
+
+    const entraram = new Set(doTipo.filter((a) => a.sentido === "entrada").map((a) => a.p))
+    const aptos = dados?.aptos.length ?? 0
+    const aptosQueEntraram = dados?.aptos.filter((ap) => entraram.has(ap.p)).length ?? 0
+    return { pessoas: pessoas.size, porTipo, entradas, saidas, leituras, perfil, ultimo, dentro, entraram, aptos, aptosQueEntraram }
+  }, [filtrados, doTipo, dados])
+
+  // Colunas: por hora (um dia) ou por dia (período), entradas e saídas lado a lado
   const grafico = useMemo(() => {
-    const baldes = new Map<string, Record<TipoPessoa, number>>()
+    const baldes = new Map<string, Record<Sentido, number>>()
     for (const a of filtrados) {
       const l = local(a.em)
       const chave = umDia ? l.slice(11, 13) : l.slice(0, 10)
-      const b = baldes.get(chave) ?? { dependente: 0, colaborador: 0, outro: 0 }
-      b[dados!.pessoas[a.p].tipo]++
+      const b = baldes.get(chave) ?? { entrada: 0, saida: 0 }
+      b[a.sentido]++
       baldes.set(chave, b)
     }
     if (baldes.size === 0) return []
     const chaves = [...baldes.keys()].sort()
-    // Preenche as horas/dias sem acesso entre o primeiro e o último
     const todas: string[] = []
     if (umDia) {
       for (let h = Number(chaves[0]); h <= Number(chaves[chaves.length - 1]); h++) todas.push(String(h).padStart(2, "0"))
@@ -182,19 +239,17 @@ export function DashboardAcessos() {
       }
     }
     return todas.map((c) => {
-      const b = baldes.get(c) ?? { dependente: 0, colaborador: 0, outro: 0 }
-      return { rotulo: umDia ? `${c}h` : dataBR(c).slice(0, 5), ...b, total: b.dependente + b.colaborador + b.outro }
+      const b = baldes.get(c) ?? { entrada: 0, saida: 0 }
+      return { rotulo: umDia ? `${c}h` : dataBR(c).slice(0, 5), ...b }
     })
-  }, [filtrados, dados, umDia])
-
-  const tiposNoGrafico = TIPOS.filter((t) => grafico.some((g) => g[t] > 0))
+  }, [filtrados, umDia])
+  const sentidosNoGrafico = (["entrada", "saida"] as Sentido[]).filter((s) => grafico.some((g) => g[s] > 0))
 
   const porCatraca = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const a of filtrados) m.set(a.catraca, (m.get(a.catraca) ?? 0) + 1)
-    return [...m.entries()].sort((a, b) => b[1] - a[1])
+    const m = new Map<string, { n: number; sentido: Sentido }>()
+    for (const a of filtrados) m.set(a.catraca, { n: (m.get(a.catraca)?.n ?? 0) + 1, sentido: a.sentido })
+    return [...m.entries()].sort((a, b) => b[1].n - a[1].n)
   }, [filtrados])
-  const maxCatraca = Math.max(1, ...porCatraca.map(([, n]) => n))
 
   const termo = busca.trim().toLowerCase()
   const termoDigitos = termo.replace(/\D/g, "")
@@ -212,62 +267,78 @@ export function DashboardAcessos() {
     [termo, termoDigitos],
   )
 
+  type LinhaPessoa = {
+    chave: string
+    pessoa: Pessoa
+    entradas: number
+    saidas: number
+    primeiraEntrada: string | null
+    ultimaSaida: string | null
+    primeira: string
+    ultima: string
+    catracas: Set<string>
+  }
   const listaPessoas = useMemo(() => {
     if (!dados) return []
-    const m = new Map<string, { chave: string; pessoa: Pessoa; primeira: string; ultima: string; acessos: number; catracas: Set<string> }>()
+    const m = new Map<string, LinhaPessoa>()
     for (const a of filtrados) {
-      const atual = m.get(a.p)
-      if (atual) {
-        atual.acessos++
-        if (a.em < atual.primeira) atual.primeira = a.em
-        if (a.em > atual.ultima) atual.ultima = a.em
-        atual.catracas.add(a.catraca)
+      const l =
+        m.get(a.p) ??
+        ({ chave: a.p, pessoa: dados.pessoas[a.p], entradas: 0, saidas: 0, primeiraEntrada: null, ultimaSaida: null, primeira: a.em, ultima: a.em, catracas: new Set() } as LinhaPessoa)
+      if (a.sentido === "entrada") {
+        l.entradas++
+        if (!l.primeiraEntrada || a.em < l.primeiraEntrada) l.primeiraEntrada = a.em
       } else {
-        m.set(a.p, { chave: a.p, pessoa: dados.pessoas[a.p], primeira: a.em, ultima: a.em, acessos: 1, catracas: new Set([a.catraca]) })
+        l.saidas++
+        if (!l.ultimaSaida || a.em > l.ultimaSaida) l.ultimaSaida = a.em
       }
+      if (a.em < l.primeira) l.primeira = a.em
+      if (a.em > l.ultima) l.ultima = a.em
+      l.catracas.add(a.catraca)
+      m.set(a.p, l)
     }
     return [...m.values()].filter((l) => casa(l.pessoa)).sort((a, b) => b.ultima.localeCompare(a.ultima))
   }, [filtrados, dados, casa])
 
-  const linhaDoTempo = useMemo(
-    () => (dados ? filtrados.filter((a) => casa(dados.pessoas[a.p])) : []),
-    [filtrados, dados, casa],
-  )
+  const linhaDoTempo = useMemo(() => (dados ? filtrados.filter((a) => casa(dados.pessoas[a.p])) : []), [filtrados, dados, casa])
 
-  const naoPassaram = useMemo(() => {
+  const naoEntraram = useMemo(() => {
     if (!dados) return []
-    const passaram = resumo.porTipo.dependente
-    return dados.aptos.filter((ap) => !passaram.has(ap.p) && casa(ap))
+    return dados.aptos.filter((ap) => !resumo.entraram.has(ap.p) && casa(ap))
   }, [dados, resumo, casa])
 
   const fmt = umDia ? hora : diaHora
   const identificacao = (p: Pessoa) => (p.cpf ? formatCPF(p.cpf) : p.re ? `RE ${p.re}` : "—")
   const responsavel = (c: { nome: string; re: string } | null) => (c ? `${c.nome} (RE ${c.re})` : "—")
+  const situacao = (chave: string) =>
+    resumo.ultimo.get(chave) === "entrada" ? (incluiHoje ? "No clube" : "Sem saída registrada") : "Saiu"
 
   function exportar() {
     if (!dados) return
     const periodo = umDia ? dados.periodo.de : `${dados.periodo.de}_a_${dados.periodo.ate}`
+    const dataHoraCompleta = (iso: string | null) => (iso ? `${dataBR(local(iso).slice(0, 10))} ${hora(iso)}` : "")
     if (aba === "pessoas") {
       baixarCsv(`acessos-pessoas-${periodo}.csv`, [
-        ["Nome", "Tipo", "CPF", "RE", "Parentesco", "Colaborador", "RE do colaborador", "Primeiro acesso", "Último acesso", "Acessos", "Catracas"],
+        ["Nome", "Tipo", "CPF", "RE", "Parentesco", "Sexo", "Idade", "Colaborador", "RE do colaborador", "Entradas", "Saídas", "Primeira entrada", "Última saída", "Situação"],
         ...listaPessoas.map((l) => [
           l.pessoa.nome, TIPO_SINGULAR[l.pessoa.tipo], l.pessoa.cpf ? formatCPF(l.pessoa.cpf) : "", l.pessoa.re ?? "",
-          l.pessoa.dependencia ?? "", l.pessoa.colaborador?.nome ?? "", l.pessoa.colaborador?.re ?? "",
-          diaHora(l.primeira), diaHora(l.ultima), l.acessos, [...l.catracas].map(nomeCatraca).join(", "),
+          l.pessoa.dependencia ?? "", l.pessoa.genero ?? "", idadeEm(l.pessoa.nascimento, l.primeira) ?? "",
+          l.pessoa.colaborador?.nome ?? "", l.pessoa.colaborador?.re ?? "",
+          l.entradas, l.saidas, dataHoraCompleta(l.primeiraEntrada), dataHoraCompleta(l.ultimaSaida), situacao(l.chave),
         ]),
       ])
     } else if (aba === "linha") {
       baixarCsv(`acessos-linha-do-tempo-${periodo}.csv`, [
-        ["Data e hora", "Nome", "Tipo", "CPF", "RE", "Colaborador", "Catraca", "Similaridade", "Leituras"],
+        ["Data e hora", "Sentido", "Nome", "Tipo", "CPF", "RE", "Colaborador", "Catraca", "Similaridade", "Leituras"],
         ...linhaDoTempo.map((a) => {
           const p = dados.pessoas[a.p]
-          return [`${dataBR(local(a.em).slice(0, 10))} ${hora(a.em)}`, p.nome, TIPO_SINGULAR[p.tipo], p.cpf ? formatCPF(p.cpf) : "", p.re ?? "", p.colaborador ? responsavel(p.colaborador) : "", nomeCatraca(a.catraca), a.similaridade ?? "", a.leituras]
+          return [dataHoraCompleta(a.em), SENTIDO_LABEL[a.sentido], p.nome, TIPO_SINGULAR[p.tipo], p.cpf ? formatCPF(p.cpf) : "", p.re ?? "", p.colaborador ? responsavel(p.colaborador) : "", nomeCatraca(a.catraca), a.similaridade ?? "", a.leituras]
         }),
       ])
     } else {
-      baixarCsv(`dependentes-que-nao-passaram-${periodo}.csv`, [
+      baixarCsv(`dependentes-que-nao-entraram-${periodo}.csv`, [
         ["Nome", "CPF", "Parentesco", "Colaborador", "RE do colaborador"],
-        ...naoPassaram.map((ap) => [ap.nome, formatCPF(ap.cpf), ap.dependencia, ap.colaborador?.nome ?? "", ap.colaborador?.re ?? ""]),
+        ...naoEntraram.map((ap) => [ap.nome, formatCPF(ap.cpf), ap.dependencia, ap.colaborador?.nome ?? "", ap.colaborador?.re ?? ""]),
       ])
     }
   }
@@ -278,7 +349,7 @@ export function DashboardAcessos() {
   }, [dados])
 
   const periodoTexto = dados ? (umDia ? dataBR(dados.periodo.de) : `${dataBR(dados.periodo.de)} a ${dataBR(dados.periodo.ate)}`) : ""
-  const qtdLista = aba === "pessoas" ? listaPessoas.length : aba === "linha" ? linhaDoTempo.length : naoPassaram.length
+  const qtdLista = aba === "pessoas" ? listaPessoas.length : aba === "linha" ? linhaDoTempo.length : naoEntraram.length
 
   return (
     <div className="space-y-6">
@@ -286,7 +357,7 @@ export function DashboardAcessos() {
         <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Dashboard
       </Button>
 
-      {/* Filtros: uma linha acima de tudo */}
+      {/* Filtros: acima de tudo */}
       <Card className="bg-white border-slate-200">
         <CardContent className="p-4">
           <form
@@ -366,7 +437,7 @@ export function DashboardAcessos() {
           </form>
           {dados && (
             <p className="text-xs text-slate-500 mt-3">
-              {periodoTexto} · atualizado às {hora(dados.atualizadoEm)} · leituras de rosto da mesma pessoa com até 2 min de intervalo contam como 1 acesso
+              {periodoTexto} · atualizado às {hora(dados.atualizadoEm)} · leituras de rosto da mesma pessoa, no mesmo sentido, com até 2 min de intervalo contam como 1 acesso
             </p>
           )}
         </CardContent>
@@ -391,28 +462,64 @@ export function DashboardAcessos() {
 
       {dados && (
         <>
-          {/* Indicadores */}
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-            <Indicador titulo="Acessos" valor={numero(filtrados.length)} detalhe={`${numero(resumo.leituras)} leituras de rosto`} />
+          {/* Movimento */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            <Indicador titulo="Entradas" valor={numero(resumo.entradas)} detalhe={`${numero(resumo.leituras)} leituras de rosto no total`} />
+            <Indicador titulo="Saídas" valor={numero(resumo.saidas)} />
             <Indicador titulo="Pessoas diferentes" valor={numero(resumo.pessoas)} />
             <Indicador
-              titulo="Dependentes"
-              valor={numero(resumo.porTipo.dependente.size)}
-              detalhe={
-                resumo.aptos
-                  ? `${numero(resumo.aptosQuePassaram)} de ${numero(resumo.aptos)} com foto aceita (${Math.round((resumo.aptosQuePassaram / resumo.aptos) * 100)}%)`
-                  : undefined
-              }
+              titulo={incluiHoje ? "No clube agora" : "Sem saída registrada"}
+              valor={numero(resumo.dentro)}
+              detalhe="última passagem foi pela entrada"
             />
-            <Indicador titulo="Colaboradores" valor={numero(resumo.porTipo.colaborador.size)} />
-            <Indicador titulo="Outros" valor={numero(resumo.porTipo.outro.size)} detalhe="fora do cadastro de colaboradores e dependentes" />
+          </div>
+
+          {/* Quem passou: por tipo e por perfil (pessoas diferentes) */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card className="bg-white border-slate-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Por tipo</CardTitle>
+                <CardDescription>Pessoas diferentes que passaram</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Proporcoes
+                  total={resumo.pessoas}
+                  linhas={[
+                    {
+                      rotulo: "Dependentes",
+                      valor: resumo.porTipo.dependente.size,
+                      detalhe: resumo.aptos ? `${numero(resumo.aptosQueEntraram)} de ${numero(resumo.aptos)} com foto aceita entraram` : undefined,
+                    },
+                    { rotulo: "Colaboradores", valor: resumo.porTipo.colaborador.size },
+                    { rotulo: "Outros", valor: resumo.porTipo.outro.size, detalhe: "fora do cadastro" },
+                  ]}
+                />
+              </CardContent>
+            </Card>
+            <Card className="bg-white border-slate-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Homens, mulheres e crianças</CardTitle>
+                <CardDescription>Pelo cadastro dos dependentes; criança = até {IDADE_CRIANCA - 1} anos</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Proporcoes
+                  total={resumo.pessoas}
+                  linhas={[
+                    { rotulo: PERFIL_LABEL.homem, valor: resumo.perfil.homem },
+                    { rotulo: PERFIL_LABEL.mulher, valor: resumo.perfil.mulher },
+                    { rotulo: PERFIL_LABEL.crianca, valor: resumo.perfil.crianca },
+                    { rotulo: PERFIL_LABEL.sem_info, valor: resumo.perfil.sem_info, detalhe: "colaboradores e outros (o cadastro não tem sexo)" },
+                  ]}
+                />
+              </CardContent>
+            </Card>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3">
-            {/* Acessos por hora / por dia */}
+            {/* Entradas e saídas por hora / por dia */}
             <Card className="bg-white border-slate-200 lg:col-span-2">
               <CardHeader>
-                <CardTitle>Acessos por {umDia ? "hora" : "dia"}</CardTitle>
+                <CardTitle>Entradas e saídas por {umDia ? "hora" : "dia"}</CardTitle>
                 <CardDescription>{periodoTexto}</CardDescription>
               </CardHeader>
               <CardContent>
@@ -421,19 +528,19 @@ export function DashboardAcessos() {
                 ) : (
                   <>
                     <ChartContainer config={chartConfig} className="aspect-auto h-72 w-full">
-                      <BarChart data={grafico} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <BarChart data={grafico} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={2}>
                         <CartesianGrid vertical={false} stroke="#e1e0d9" />
                         <XAxis dataKey="rotulo" tickLine={false} axisLine={{ stroke: "#c3c2b7" }} tickMargin={8} minTickGap={8} />
                         <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={40} tickFormatter={(v) => numero(v)} />
                         <ChartTooltip cursor={{ fill: "rgba(11,11,11,0.05)" }} content={<ChartTooltipContent />} />
-                        {tiposNoGrafico.length > 1 && <ChartLegend content={<ChartLegendContent />} />}
-                        {tiposNoGrafico.map((t) => (
-                          <Bar key={t} dataKey={t} stackId="acessos" fill={chartConfig[t].color} maxBarSize={24} shape={segmento(t)} isAnimationActive={false} />
+                        {sentidosNoGrafico.length > 1 && <ChartLegend content={<ChartLegendContent />} />}
+                        {sentidosNoGrafico.map((s) => (
+                          <Bar key={s} dataKey={s} fill={chartConfig[s].color} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
                         ))}
                       </BarChart>
                     </ChartContainer>
-                    {tiposNoGrafico.length === 1 && (
-                      <p className="text-xs text-slate-500 mt-2 text-center">{TIPO_LABEL[tiposNoGrafico[0]]}</p>
+                    {sentidosNoGrafico.length === 1 && (
+                      <p className="text-xs text-slate-500 mt-2 text-center">{chartConfig[sentidosNoGrafico[0]].label}</p>
                     )}
                     <details className="mt-3 text-sm">
                       <summary className="cursor-pointer text-slate-600">Ver os números</summary>
@@ -441,20 +548,16 @@ export function DashboardAcessos() {
                         <thead className="text-slate-500">
                           <tr>
                             <th className="py-1 pr-2 font-medium">{umDia ? "Hora" : "Dia"}</th>
-                            {tiposNoGrafico.map((t) => (
-                              <th key={t} className="py-1 pr-2 font-medium text-right">{TIPO_LABEL[t]}</th>
-                            ))}
-                            <th className="py-1 font-medium text-right">Total</th>
+                            <th className="py-1 pr-2 font-medium text-right">Entradas</th>
+                            <th className="py-1 font-medium text-right">Saídas</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {grafico.map((g) => (
                             <tr key={g.rotulo}>
                               <td className="py-1 pr-2">{g.rotulo}</td>
-                              {tiposNoGrafico.map((t) => (
-                                <td key={t} className="py-1 pr-2 text-right">{numero(g[t])}</td>
-                              ))}
-                              <td className="py-1 text-right font-medium">{numero(g.total)}</td>
+                              <td className="py-1 pr-2 text-right">{numero(g.entrada)}</td>
+                              <td className="py-1 text-right">{numero(g.saida)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -469,28 +572,16 @@ export function DashboardAcessos() {
             <Card className="bg-white border-slate-200">
               <CardHeader>
                 <CardTitle>Acessos por catraca</CardTitle>
-                <CardDescription>Onde as pessoas entraram</CardDescription>
+                <CardDescription>Entrada: 192.168.9.74 · Saída: 192.168.9.75</CardDescription>
               </CardHeader>
               <CardContent>
                 {porCatraca.length === 0 ? (
                   <p className="text-sm text-slate-500">Nenhum acesso no período.</p>
                 ) : (
-                  <ul className="space-y-3">
-                    {porCatraca.map(([ip, n]) => (
-                      <li key={ip} title={`${nomeCatraca(ip)}: ${numero(n)} acessos`}>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-700">
-                            {nomeCatraca(ip)}
-                            {dados.catracas[ip] && <span className="text-slate-400 text-xs"> · {ip}</span>}
-                          </span>
-                          <span className="font-medium text-slate-900 tabular-nums">{numero(n)}</span>
-                        </div>
-                        <div className="mt-1 h-2.5 rounded bg-slate-100">
-                          <div className="h-2.5 rounded" style={{ width: `${(n / maxCatraca) * 100}%`, background: "#2a78d6" }} />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  <Proporcoes
+                    total={filtrados.length}
+                    linhas={porCatraca.map(([ip, { n }]) => ({ rotulo: nomeCatraca(ip), valor: n, detalhe: nomeCatraca(ip) !== ip ? ip : undefined }))}
+                  />
                 )}
               </CardContent>
             </Card>
@@ -504,7 +595,7 @@ export function DashboardAcessos() {
                   <TabsList className="flex-wrap h-auto">
                     <TabsTrigger value="pessoas">Quem passou ({numero(listaPessoas.length)})</TabsTrigger>
                     <TabsTrigger value="linha">Linha do tempo ({numero(linhaDoTempo.length)})</TabsTrigger>
-                    <TabsTrigger value="nao">Dependentes que não passaram ({numero(naoPassaram.length)})</TabsTrigger>
+                    <TabsTrigger value="nao">Dependentes que não entraram ({numero(naoEntraram.length)})</TabsTrigger>
                   </TabsList>
                   <div className="flex gap-2">
                     <div className="relative flex-1 lg:w-80">
@@ -525,31 +616,42 @@ export function DashboardAcessos() {
 
                 <TabsContent value="pessoas">
                   <Lista vazio={listaPessoas.length === 0}>
-                    {listaPessoas.slice(0, MAX_LINHAS).map((l) => (
-                      <li key={l.chave} className="px-3 py-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="font-medium text-slate-800">
-                            {l.pessoa.nome}{" "}
-                            <Badge variant="outline" className="ml-1 font-normal">
-                              {l.pessoa.dependencia ?? TIPO_SINGULAR[l.pessoa.tipo]}
-                            </Badge>
-                            {!l.pessoa.cadastrado && l.pessoa.tipo !== "outro" && (
-                              <span className="ml-1 text-xs text-amber-700">fora do cadastro</span>
-                            )}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {identificacao(l.pessoa)}
-                            {l.pessoa.colaborador && <> · de {responsavel(l.pessoa.colaborador)}</>}
-                          </p>
-                        </div>
-                        <div className="text-xs text-slate-600 sm:text-right tabular-nums">
-                          <p>
-                            {l.acessos === 1 ? `entrou ${fmt(l.primeira)}` : `${l.acessos} acessos · ${fmt(l.primeira)} a ${fmt(l.ultima)}`}
-                          </p>
-                          <p className="text-slate-500">{[...l.catracas].map(nomeCatraca).join(", ")}</p>
-                        </div>
-                      </li>
-                    ))}
+                    {listaPessoas.slice(0, MAX_LINHAS).map((l) => {
+                      const sit = situacao(l.chave)
+                      return (
+                        <li key={l.chave} className="px-3 py-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-medium text-slate-800">
+                              {l.pessoa.nome}{" "}
+                              <Badge variant="outline" className="ml-1 font-normal">
+                                {l.pessoa.dependencia ?? TIPO_SINGULAR[l.pessoa.tipo]}
+                              </Badge>
+                              {!l.pessoa.cadastrado && l.pessoa.tipo !== "outro" && (
+                                <span className="ml-1 text-xs text-amber-700">fora do cadastro</span>
+                              )}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {identificacao(l.pessoa)}
+                              {l.pessoa.colaborador && <> · de {responsavel(l.pessoa.colaborador)}</>}
+                            </p>
+                          </div>
+                          <div className="text-xs text-slate-600 sm:text-right tabular-nums">
+                            <p>
+                              {/* Em ordem de horário: primeira entrada e última saída */}
+                              {[
+                                ...(l.primeiraEntrada ? [{ t: l.primeiraEntrada, txt: `entrou ${fmt(l.primeiraEntrada)}` }] : []),
+                                ...(l.ultimaSaida ? [{ t: l.ultimaSaida, txt: `saiu ${fmt(l.ultimaSaida)}` }] : []),
+                              ]
+                                .sort((a, b) => a.t.localeCompare(b.t))
+                                .map((m) => m.txt)
+                                .join(" · ")}
+                              {(l.entradas > 1 || l.saidas > 1) && ` · ${l.entradas} entrada(s), ${l.saidas} saída(s)`}
+                            </p>
+                            <p className={sit === "No clube" ? "font-medium text-slate-800" : "text-slate-500"}>{sit}</p>
+                          </div>
+                        </li>
+                      )
+                    })}
                   </Lista>
                 </TabsContent>
 
@@ -559,7 +661,10 @@ export function DashboardAcessos() {
                       const p = dados.pessoas[a.p]
                       return (
                         <li key={`${a.p}-${a.em}-${i}`} className="px-3 py-2 flex gap-3">
-                          <span className="w-24 shrink-0 font-mono text-slate-700">{fmt(a.em)}</span>
+                          <div className="w-24 shrink-0">
+                            <p className="font-mono text-slate-700">{fmt(a.em)}</p>
+                            <SentidoTag sentido={a.sentido} />
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-slate-800">
                               <span className="font-medium">{p.nome}</span>
@@ -580,15 +685,12 @@ export function DashboardAcessos() {
                 </TabsContent>
 
                 <TabsContent value="nao">
-                  <p className="text-xs text-slate-500 mb-2">
-                    Dependentes com foto aceita pelas catracas que não tiveram nenhum acesso no período
-                    {catraca !== "todas" && ` (na catraca ${nomeCatraca(catraca)})`}.
-                  </p>
+                  <p className="text-xs text-slate-500 mb-2">Dependentes com foto aceita pelas catracas que não entraram no período.</p>
                   {tipo !== "todos" && tipo !== "dependente" ? (
                     <p className="text-sm text-slate-500">Escolha o tipo &quot;Todos&quot; ou &quot;Dependentes&quot; para ver esta lista.</p>
                   ) : (
-                    <Lista vazio={naoPassaram.length === 0}>
-                      {naoPassaram.slice(0, MAX_LINHAS).map((ap) => (
+                    <Lista vazio={naoEntraram.length === 0}>
+                      {naoEntraram.slice(0, MAX_LINHAS).map((ap) => (
                         <li key={ap.p} className="px-3 py-2">
                           <p className="font-medium text-slate-800">
                             {ap.nome}{" "}
