@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { isUniqueViolation, supabaseAdmin } from "@/lib/supabase/server"
 import { audit, exigirAdmin } from "@/lib/auth"
-import { removeFace, removerDasCatracas } from "@/lib/dahua"
+import { removerDasCatracas } from "@/lib/dahua"
 import { enviarFaceDependente, type ResultadoFacial } from "@/lib/facial"
 import { registrarEnvio } from "@/lib/log-envios"
 import { photoKeyFromUrl } from "@/lib/s3"
@@ -188,30 +188,58 @@ async function editarDados(request: NextRequest, body: Record<string, unknown>, 
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+/**
+ * Exclui o dependente (permissão "excluir"). Antes, tira a face e o cartão dele das catracas, para não
+ * continuar entrando, e registra a remoção no Histórico de Fotos (o registro fica, com nome e CPF).
+ * Catracas sem resposta não impedem a exclusão: a resposta traz um aviso para remover depois.
+ */
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const auth = await exigirAdmin("excluir")
     if ("resposta" in auth) return auth.resposta
     const { admin } = auth
 
-    const { data, error } = await supabaseAdmin
+    const { data: atual, error: atualError } = await supabaseAdmin
       .from("dependentes")
-      .delete()
+      .select("id, cpf, nome_completo, colaborador_id, foto_url")
       .eq("id", params.id)
-      .select("id, cpf, nome_completo, colaborador_id")
       .maybeSingle()
+    if (atualError) throw new Error(atualError.message)
+    if (!atual) return NextResponse.json({ error: "Dependente não encontrado" }, { status: 404 })
 
+    const cpf = cpf11(atual.cpf)
+    let faces: string[] = []
+    try {
+      const terminais = await removerDasCatracas(cpf)
+      faces = terminais.map((t) => t.face)
+      // Gravado antes de excluir: o histórico guarda nome e CPF (o vínculo com o dependente vira nulo)
+      await registrarEnvio(request, {
+        origem: "admin",
+        acao: "remocao",
+        resultado: faces.every((f) => f === "removida") ? "removida" : faces.every((f) => f === "sem conexão") ? "sem_conexao" : "erro",
+        dependente: { ...atual, cpf },
+        adminId: admin.id,
+        fotoUrl: atual.foto_url,
+        detalhes: { motivo: "dependente_excluido", terminais },
+      })
+    } catch (err) {
+      console.warn("[admin/dependentes] dependente não removido das catracas:", (err as Error).message)
+    }
+
+    const { error } = await supabaseAdmin.from("dependentes").delete().eq("id", atual.id)
     if (error) throw new Error(error.message)
-    if (!data) return NextResponse.json({ error: "Dependente não encontrado" }, { status: 404 })
 
-    // Dependente excluído não deve continuar com acesso pelos terminais faciais
-    await removeFace(data.cpf)
-    await audit({ tipo: "admin", id: admin.id }, "excluir", "dependentes", data.id, {
-      nome_completo: data.nome_completo,
-      colaborador_id: data.colaborador_id,
+    await audit({ tipo: "admin", id: admin.id }, "excluir", "dependentes", atual.id, {
+      nome_completo: atual.nome_completo,
+      colaborador_id: atual.colaborador_id,
+      catracas: faces,
     })
 
-    return NextResponse.json({ message: "Dependente excluído com sucesso" })
+    // "erro 4xx" na remoção costuma ser face que nunca foi cadastrada: só avisa quando a catraca não respondeu
+    const aviso = faces.some((f) => f === "sem conexão")
+      ? `Uma ou mais catracas não responderam. Remova o CPF ${cpf} em Carga no Facial › Remover das catracas.`
+      : undefined
+    return NextResponse.json({ message: "Dependente excluído com sucesso", aviso })
   } catch (error) {
     console.error("[admin/dependentes] erro ao excluir:", (error as Error).message)
     return NextResponse.json({ error: "Erro ao excluir dependente" }, { status: 500 })

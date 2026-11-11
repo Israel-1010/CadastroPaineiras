@@ -50,7 +50,11 @@ const ACAO: Record<string, string> = {
   carga: "Carga (admin)",
   remocao: "Remoção das catracas",
 }
-const MOTIVO: Record<string, string> = { cpf_alterado: "CPF alterado no cadastro", nome_alterado: "Nome alterado no cadastro" }
+const MOTIVO: Record<string, string> = {
+  cpf_alterado: "CPF alterado no cadastro",
+  nome_alterado: "Nome alterado no cadastro",
+  dependente_excluido: "Dependente removido do cadastro",
+}
 
 // Situação: sempre ícone + texto (a cor nunca fala sozinha)
 const RESULTADO: Record<string, { texto: string; classe: string; icone: LucideIcon }> = {

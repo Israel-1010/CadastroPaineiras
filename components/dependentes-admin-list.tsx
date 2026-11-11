@@ -8,7 +8,17 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2, Clock3, Loader2, Eye, EyeOff, UserPlus, Pencil } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2, Clock3, Loader2, Eye, EyeOff, UserPlus, Pencil, Trash2, AlertCircle } from "lucide-react"
 import { DependenteAdminDialog } from "@/components/dependente-admin-dialog"
 import { pode, type Perfil } from "@/lib/permissoes"
 import { formatCPF, maskCPF, onlyDigits } from "@/lib/cpf"
@@ -47,6 +57,10 @@ export function DependentesAdminList() {
   const [editando, setEditando] = useState<Dependente | null>(null)
   const [perfil, setPerfil] = useState<Perfil>("admin")
   const [mensagem, setMensagem] = useState<string | null>(null)
+  // Aviso de atenção (ex.: catraca não respondeu na remoção, erro ao remover)
+  const [alerta, setAlerta] = useState<string | null>(null)
+  const [removendo, setRemovendo] = useState<Dependente | null>(null)
+  const [excluindoId, setExcluindoId] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -129,21 +143,25 @@ export function DependentesAdminList() {
     }
   }
 
-  const handleDeleteDependente = async (dependenteId: string) => {
-    if (!confirm("Tem certeza que deseja excluir este dependente?")) return
-
+  /** Exclui o dependente confirmado na caixa de diálogo (o servidor também o tira das catracas) */
+  const handleDeleteDependente = async (dependente: Dependente) => {
+    setRemovendo(null)
+    setExcluindoId(dependente.id)
+    setMensagem(null)
+    setAlerta(null)
     try {
-      const response = await fetch(`/api/admin/dependentes/${dependenteId}`, {
-        method: "DELETE",
-      })
+      const response = await fetch(`/api/admin/dependentes/${dependente.id}`, { method: "DELETE" })
+      const data = await response.json().catch(() => ({}))
+      if (response.status === 401) return router.replace("/admin/login")
+      if (!response.ok) throw new Error(data.error || "Erro ao remover o dependente")
 
-      if (!response.ok) {
-        throw new Error("Erro ao excluir dependente")
-      }
-
-      setDependentes((prev) => prev.filter((dep) => dep.id !== dependenteId))
-    } catch {
-      alert("Erro ao excluir dependente")
+      setDependentes((prev) => prev.filter((dep) => dep.id !== dependente.id))
+      setMensagem(`${dependente.nome_completo} removido(a) do cadastro e das catracas.`)
+      if (data.aviso) setAlerta(data.aviso)
+    } catch (error) {
+      setAlerta(`${dependente.nome_completo}: ${(error as Error).message}`)
+    } finally {
+      setExcluindoId(null)
     }
   }
 
@@ -214,6 +232,33 @@ export function DependentesAdminList() {
           <CheckCircle2 className="w-4 h-4" /> {mensagem}
         </p>
       )}
+      {alerta && (
+        <p className="flex items-start gap-1.5 text-sm text-amber-800">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {alerta}
+        </p>
+      )}
+
+      <AlertDialog open={Boolean(removendo)} onOpenChange={(aberto) => !aberto && setRemovendo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover {removendo?.nome_completo}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O dependente sai do cadastro de {removendo?.colaborador?.nome_completo ?? "seu colaborador"} e a face dele é
+              apagada das catracas: ele deixa de entrar pelo facial. Não dá para desfazer; para voltar, é preciso
+              cadastrar de novo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => removendo && handleDeleteDependente(removendo)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <DependenteAdminDialog
         open={novoAberto || Boolean(editando)}
@@ -224,6 +269,7 @@ export function DependentesAdminList() {
           setEditando(null)
         }}
         onSaved={(salvo: Dependente, aviso?: string) => {
+          setAlerta(null)
           if (editando) {
             setDependentes((prev) => prev.map((dep) => (dep.id === salvo.id ? salvo : dep)))
             setMensagem(`Dados de ${salvo.nome_completo} salvos.${aviso ? ` ${aviso}` : ""}`)
@@ -411,10 +457,25 @@ export function DependentesAdminList() {
                   </span>
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                 {pode(perfil, "cadastro") && (
                   <Button variant="outline" size="sm" onClick={() => setEditando(dependente)}>
                     <Pencil className="w-4 h-4 mr-2" /> Editar
+                  </Button>
+                )}
+                {pode(perfil, "excluir") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => setRemovendo(dependente)}
+                    disabled={excluindoId === dependente.id}
+                  >
+                    {excluindoId === dependente.id ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Removendo...</>
+                    ) : (
+                      <><Trash2 className="w-4 h-4 mr-2" /> Remover</>
+                    )}
                   </Button>
                 )}
                 {pode(perfil, "presenca") && (
