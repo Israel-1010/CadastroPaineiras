@@ -5,8 +5,10 @@ export type Permissao = "cadastro" | "presenca" | "excluir" | "relatorios" | "fa
 
 const DO_PERFIL: Record<Perfil, readonly Permissao[]> = {
   admin: ["cadastro", "presenca", "excluir", "relatorios", "facial", "sistema"],
-  // RH: cadastra e consulta colaboradores e dependentes (inclusive por planilha); nada de catracas
-  rh: ["cadastro"],
+  // RH: cadastra, corrige e remove colaboradores e dependentes (inclusive por planilha). Nada de catracas,
+  // exceto que remover um dependente também tira a face dele das catracas.
+  // "excluir" só é usado na remoção de dependentes.
+  rh: ["cadastro", "excluir"],
 }
 
 /**
