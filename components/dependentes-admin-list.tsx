@@ -22,6 +22,7 @@ import { ArrowLeft, Search, Users, Calendar, Award as IdCard, User, CheckCircle2
 import { DependenteAdminDialog } from "@/components/dependente-admin-dialog"
 import { pode, type Perfil } from "@/lib/permissoes"
 import { formatCPF, maskCPF, onlyDigits } from "@/lib/cpf"
+import { semAcento, temPalavras } from "@/lib/busca"
 import { DEPENDENCIA_LABEL, DEPENDENCIAS, dependenciaLabel, normalizeDependencia } from "@/lib/types"
 
 const FILHOS = new Set<string>(["Filho", "Filha", "Enteado"])
@@ -91,14 +92,14 @@ export function DependentesAdminList() {
   }, [router])
 
   useEffect(() => {
-    const term = searchTerm.trim().toLowerCase()
+    const term = semAcento(searchTerm.trim())
     const termDigits = onlyDigits(term)
     const filtered = dependentes.filter((dependente) => {
       const matchesSearch =
-        dependente.nome_completo.toLowerCase().includes(term) ||
-        (termDigits.length > 0 && dependente.cpf.includes(termDigits)) ||
-        (dependente.colaborador?.nome_completo ?? "").toLowerCase().includes(term) ||
-        (dependente.colaborador?.re ?? "").toLowerCase().includes(term)
+        temPalavras(dependente.nome_completo, term) ||
+        (termDigits.length > 0 && onlyDigits(String(dependente.cpf ?? "")).includes(termDigits)) ||
+        temPalavras(dependente.colaborador?.nome_completo, term) ||
+        semAcento(dependente.colaborador?.re).includes(term)
 
       const matchesDependencia =
         filterDependencia === "todos" || normalizeDependencia(dependente.dependencia) === filterDependencia

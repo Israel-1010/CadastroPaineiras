@@ -8,13 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, Search, UserPlus, Users, Mail, Award as IdCard, Calendar, Eye, EyeOff } from "lucide-react"
 import { formatCPF, maskCPF, onlyDigits } from "@/lib/cpf"
+import { semAcento, temPalavras } from "@/lib/busca"
 
 interface Colaborador {
   id: string
   re: string
   cpf: string
   nome_completo: string
-  email: string
+  email: string | null
   created_at: string
   dependentes: { count: number }[]
 }
@@ -55,14 +56,15 @@ export function ColaboradoresListAdmin() {
   }, [router])
 
   useEffect(() => {
-    const term = searchTerm.trim().toLowerCase()
+    const term = semAcento(searchTerm.trim())
     const termDigits = onlyDigits(term)
+    // Campos podem vir vazios (a maioria dos colaboradores da planilha não tem e-mail): semAcento aceita null
     const filtered = colaboradores.filter(
       (colaborador) =>
-        colaborador.nome_completo.toLowerCase().includes(term) ||
-        colaborador.re.toLowerCase().includes(term) ||
-        (termDigits.length > 0 && colaborador.cpf.includes(termDigits)) ||
-        colaborador.email.toLowerCase().includes(term),
+        temPalavras(colaborador.nome_completo, term) ||
+        semAcento(colaborador.re).includes(term) ||
+        (termDigits.length > 0 && onlyDigits(String(colaborador.cpf ?? "")).includes(termDigits)) ||
+        semAcento(colaborador.email).includes(term),
     )
     setFilteredColaboradores(filtered)
   }, [searchTerm, colaboradores])
@@ -210,10 +212,12 @@ export function ColaboradoresListAdmin() {
                   <span>CPF: {showCPF ? formatCPF(colaborador.cpf) : maskCPF(colaborador.cpf)}</span>
                 </div>
 
-                <div className="flex items-center space-x-2 text-sm text-slate-600">
-                  <Mail className="w-4 h-4" />
-                  <span className="truncate">{colaborador.email}</span>
-                </div>
+                {colaborador.email && (
+                  <div className="flex items-center space-x-2 text-sm text-slate-600">
+                    <Mail className="w-4 h-4" />
+                    <span className="truncate">{colaborador.email}</span>
+                  </div>
+                )}
 
                 <div className="flex items-center space-x-2 text-sm text-slate-600">
                   <Calendar className="w-4 h-4" />
