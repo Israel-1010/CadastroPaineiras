@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [re, setRe] = useState("")
   const [cpf, setCpf] = useState("")
   const [cpfError, setCpfError] = useState<string | null>(null)
-  // O CPF funciona como senha: fica oculto (••••) enquanto digita, com o olho para conferir
+  // O CPF funciona como senha: fica oculto (***.***.***-**) enquanto digita, com o olho para conferir
   const [mostrarCpf, setMostrarCpf] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -30,8 +30,23 @@ export default function LoginPage() {
     setRe(e.target.value.replace(/\D/g, ""))
   }
 
+  // Oculto: cada dígito vira * na hora (pontos e traço continuam), sem o atraso do campo de senha
+  const cpfNaTela = mostrarCpf ? cpf : cpf.replace(/\d/g, "*")
+
+  /** Dígitos do CPF a partir do que está no campo (no modo oculto ele só tem *, pontos, traço e o que foi digitado agora) */
+  const digitosDoCampo = (valor: string) => {
+    if (mostrarCpf) return valor.replace(/\D/g, "")
+    const atuais = cpf.replace(/\D/g, "")
+    // Cada * que sobrou é um dígito já digitado; a edição é sempre no fim (o campo devolve o cursor para lá)
+    const estrelas = (valor.match(/\*/g) || []).length
+    const novos = valor.replace(/\D/g, "")
+    // Apagou só um ponto ou o traço: apaga o dígito antes dele (senão o ponto voltaria e o campo pareceria travado)
+    if (!novos && estrelas === atuais.length && valor.length < cpfNaTela.length) return atuais.slice(0, -1)
+    return atuais.slice(0, estrelas) + novos
+  }
+
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const masked = maskCPFInput(e.target.value)
+    const masked = maskCPFInput(digitosDoCampo(e.target.value))
     setCpf(masked)
     if (isCPFFormat(masked)) {
       setCpfError(isValidCPF(masked) ? null : "CPF inválido")
@@ -120,14 +135,14 @@ export default function LoginPage() {
               <input
                 ref={cpfRef}
                 id="cpf"
-                // password esconde os dígitos; inputMode mantém o teclado numérico no celular
-                type={mostrarCpf ? "tel" : "password"}
+                type="tel"
                 inputMode="numeric"
                 autoComplete="off"
-                // usar [0-9] em vez de \d
-                pattern="[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}"
+                autoCorrect="off"
+                spellCheck={false}
+                // Sem pattern: com o CPF oculto o campo tem *; a validação é feita no código
                 placeholder="000.000.000-00"
-                value={cpf}
+                value={cpfNaTela}
                 onFocus={() => focusIntoView(cpfRef.current)}
                 onChange={handleCPFChange}
                 onBlur={handleCPFBlur}
@@ -135,6 +150,8 @@ export default function LoginPage() {
                 aria-invalid={Boolean(cpfError)}
                 aria-describedby="cpf-help"
                 className={`w-full pl-3 pr-11 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                  !mostrarCpf && cpf ? "tracking-[0.15em]" : ""
+                } ${
                   cpfError ? "border-red-400 focus:ring-red-500" : "border-gray-300 focus:ring-pink-500"
                 }`}
                 required
