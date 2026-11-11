@@ -76,13 +76,13 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
 
   const setEnvioDe = (id: string, estado: EstadoEnvio) => setEnvio((prev) => ({ ...prev, [id]: estado }))
 
-  /** Foto nova escolhida (já no S3), ainda não enviada: mostra no cartão e habilita "Enviar foto" */
-  const handleNovaFoto = (id: string, fotoUrl: string) => {
-    setPendente((prev) => ({ ...prev, [id]: fotoUrl }))
-    setEnvio((prev) => {
-      const { [id]: _, ...resto } = prev
-      return resto
-    })
+  /**
+   * Foto nova tirada ou escolhida (já no S3): mostra no cartão e já envia às catracas.
+   * Se o envio não completar (sem conexão, termo novo), ela fica pendente e o botão permite tentar de novo.
+   */
+  const handleNovaFoto = (dependente: Dependente, fotoUrl: string) => {
+    setPendente((prev) => ({ ...prev, [dependente.id]: fotoUrl }))
+    void handleEnviar(dependente, fotoUrl)
   }
 
   const descartarPendente = (id: string) =>
@@ -95,8 +95,7 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
    * Envia às catracas a foto nova (se houver) ou reenvia a já salva.
    * O servidor só grava a foto nova se o facial aceitar e registra o resultado em foto_aceita.
    */
-  const handleEnviar = async (dependente: Dependente) => {
-    const fotoNova = pendente[dependente.id]
+  const handleEnviar = async (dependente: Dependente, fotoNova: string | undefined = pendente[dependente.id]) => {
     setEnvioDe(dependente.id, { status: "enviando" })
     const resp = await fetch(`/api/dependentes/${dependente.id}`, {
       method: "PATCH",
@@ -254,19 +253,21 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                   ) : (
                   <>
                   {dependente.foto_url || pendente[dependente.id] ? (
-                    <p className="text-xs text-[var(--muted-foreground)]">Trocar foto:</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">Trocar foto (a nova vai direto para as catracas):</p>
                   ) : (
-                    <p className="text-xs text-amber-600">Sem foto. Tire ou escolha uma foto do dependente:</p>
+                    <p className="text-xs text-amber-600">Sem foto. Tire ou escolha uma foto do dependente; ela vai direto para as catracas:</p>
                   )}
                   <PhotoUpload
                     variant="buttons"
-                    disabled={!aceito}
+                    disabled={!aceito || envio[dependente.id]?.status === "enviando"}
                     userName={dependente.nome_completo}
-                    onPhotoChange={(url) => url && handleNovaFoto(dependente.id, url)}
+                    confirmLabel="Enviar esta foto"
+                    onPhotoChange={(url) => url && handleNovaFoto(dependente, url)}
                   />
 
                   {(() => {
                     const estado = envio[dependente.id]?.status
+                    const fotoPendente = Boolean(pendente[dependente.id])
                     // Enviada pelo próprio colaborador e aceita: botão verde até ele trocar a foto
                     if (
                       !pendente[dependente.id] &&
@@ -279,17 +280,20 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                         </Button>
                       )
                     }
-                    // Foto nova ou já salva (inclusive enviada pela carga do admin): pode enviar
-                    const podeEnviar = Boolean(pendente[dependente.id] || dependente.foto_url)
+                    // Sem foto nenhuma: a foto tirada ou escolhida já é enviada, não há botão
+                    if (!fotoPendente && !dependente.foto_url) return null
+                    // Foto nova que não chegou às catracas (sem conexão, termo novo) ou foto já salva
+                    // (inclusive enviada pela carga do admin): pode enviar
                     return (
                       <Button
                         className="w-full bg-[var(--primary)] text-white hover:opacity-90"
                         onClick={() => handleEnviar(dependente)}
-                        disabled={!aceito || !podeEnviar || estado === "enviando"}
-                        title={podeEnviar ? undefined : "Tire ou escolha uma foto para enviar"}
+                        disabled={!aceito || estado === "enviando"}
                       >
                         {estado === "enviando" ? (
-                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</>
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando às catracas...</>
+                        ) : fotoPendente && estado === "erro" ? (
+                          <><Send className="w-4 h-4 mr-2" /> Tentar enviar de novo</>
                         ) : (
                           <><Send className="w-4 h-4 mr-2" /> Enviar foto</>
                         )}
@@ -297,8 +301,8 @@ export function DependentesList({ dependentes: initialDependentes, colaboradorId
                     )
                   })()}
 
-                  {/* Foto escolhida que ainda só existe nesta tela: some ao atualizar se não for enviada */}
-                  {pendente[dependente.id] && envio[dependente.id]?.status !== "enviando" && (
+                  {/* Foto nova parada nesta tela (ex.: termo novo para aceitar): some ao atualizar se não for enviada */}
+                  {pendente[dependente.id] && !envio[dependente.id] && (
                     <p className="flex items-start gap-1.5 text-sm text-amber-700">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                       Foto nova ainda não enviada. Clique em &quot;Enviar foto&quot;: ela só fica salva se a catraca aceitar.

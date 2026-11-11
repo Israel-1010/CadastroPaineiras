@@ -2,12 +2,15 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { Eye, EyeOff } from "lucide-react"
 import { isValidCPF, maskCPFInput } from "@/lib/cpf"
 
 export default function LoginPage() {
   const [re, setRe] = useState("")
   const [cpf, setCpf] = useState("")
   const [cpfError, setCpfError] = useState<string | null>(null)
+  // O CPF funciona como senha: fica oculto (••••) enquanto digita, com o olho para conferir
+  const [mostrarCpf, setMostrarCpf] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -113,26 +116,41 @@ export default function LoginPage() {
             <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-1">
               CPF
             </label>
-            <input
-              ref={cpfRef}
-              id="cpf"
-              type="tel"
-              inputMode="numeric"
-              // usar [0-9] em vez de \d
-              pattern="[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}"
-              placeholder="000.000.000-00"
-              value={cpf}
-              onFocus={() => focusIntoView(cpfRef.current)}
-              onChange={handleCPFChange}
-              onBlur={handleCPFBlur}
-              maxLength={14}
-              aria-invalid={Boolean(cpfError)}
-              aria-describedby="cpf-help"
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                cpfError ? "border-red-400 focus:ring-red-500" : "border-gray-300 focus:ring-pink-500"
-              }`}
-              required
-            />
+            <div className="relative">
+              <input
+                ref={cpfRef}
+                id="cpf"
+                // password esconde os dígitos; inputMode mantém o teclado numérico no celular
+                type={mostrarCpf ? "tel" : "password"}
+                inputMode="numeric"
+                autoComplete="off"
+                // usar [0-9] em vez de \d
+                pattern="[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}"
+                placeholder="000.000.000-00"
+                value={cpf}
+                onFocus={() => focusIntoView(cpfRef.current)}
+                onChange={handleCPFChange}
+                onBlur={handleCPFBlur}
+                maxLength={14}
+                aria-invalid={Boolean(cpfError)}
+                aria-describedby="cpf-help"
+                className={`w-full pl-3 pr-11 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                  cpfError ? "border-red-400 focus:ring-red-500" : "border-gray-300 focus:ring-pink-500"
+                }`}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarCpf((v) => !v)}
+                // Não tira o foco do campo (o teclado do celular continua aberto)
+                onMouseDown={(e) => e.preventDefault()}
+                aria-label={mostrarCpf ? "Ocultar CPF" : "Mostrar CPF"}
+                aria-pressed={mostrarCpf}
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500"
+              >
+                {mostrarCpf ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
             <p id="cpf-help" className={`mt-1 text-xs ${cpfError ? "text-red-600" : "text-transparent"}`}>
               {cpfError || "placeholder"}
             </p>

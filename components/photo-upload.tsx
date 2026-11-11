@@ -35,6 +35,8 @@ interface PhotoUploadProps {
   variant?: "full" | "buttons"
   /** Bloqueia câmera e galeria (ex.: termo de consentimento ainda não aceito) */
   disabled?: boolean
+  /** Texto do botão que confirma a foto tirada na câmera */
+  confirmLabel?: string
 }
 
 export function PhotoUpload({
@@ -44,6 +46,7 @@ export function PhotoUpload({
   onUploadingChange,
   variant = "full",
   disabled = false,
+  confirmLabel = "Usar Esta Foto",
 }: PhotoUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -364,7 +367,7 @@ export function PhotoUpload({
                     Tirar Novamente
                   </Button>
                   <Button onClick={useCapturedPhoto} disabled={isUploading} className="bg-green-600 hover:bg-green-700">
-                    {isUploading ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</>) : ("Usar Esta Foto")}
+                    {isUploading ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</>) : confirmLabel}
                   </Button>
                 </div>
               </div>

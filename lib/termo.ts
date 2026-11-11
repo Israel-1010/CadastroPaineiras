@@ -12,7 +12,7 @@ export const TERMO_TITULO = "Termo de consentimento para uso de dados pessoais e
 export type SecaoTermo = { titulo: string; paragrafos?: string[]; itens?: string[] }
 
 /** Prazo de exclusão depois do evento (também citado no resumo) */
-export const TERMO_PRAZO_EXCLUSAO = "30 dias"
+export const TERMO_PRAZO_EXCLUSAO = "5 dias"
 
 export const TERMO_SECOES: SecaoTermo[] = [
   {
