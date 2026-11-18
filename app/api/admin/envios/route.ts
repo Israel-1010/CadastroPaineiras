@@ -18,7 +18,8 @@ const FUSO = "-03:00"
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = await exigirAdmin("facial")
+    // Só consulta: liberado também ao RH (a carga e a remoção nas catracas continuam com "facial")
+    const auth = await exigirAdmin("historico")
     if ("resposta" in auth) return auth.resposta
 
     const sp = request.nextUrl.searchParams

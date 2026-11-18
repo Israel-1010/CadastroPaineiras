@@ -53,7 +53,7 @@ export function AdminNavigation({ perfil }: { perfil: Perfil }) {
       icon: History,
       iconColor: "text-violet-600",
       color: "bg-violet-50 border-violet-200",
-      permissao: "facial",
+      permissao: "historico",
       action: () => router.push("/admin/envios"),
     },
     {

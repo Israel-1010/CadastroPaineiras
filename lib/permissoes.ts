@@ -1,14 +1,15 @@
 // PD-02: perfis do painel administrativo. Usado pelo servidor (bloqueio) e pela tela (o que aparece).
 
 export type Perfil = "admin" | "rh"
-export type Permissao = "cadastro" | "presenca" | "excluir" | "relatorios" | "facial" | "sistema"
+// "historico": só consultar o Histórico de Fotos (separado de "facial", que envia e remove faces nas catracas)
+export type Permissao = "cadastro" | "presenca" | "excluir" | "relatorios" | "facial" | "historico" | "sistema"
 
 const DO_PERFIL: Record<Perfil, readonly Permissao[]> = {
-  admin: ["cadastro", "presenca", "excluir", "relatorios", "facial", "sistema"],
-  // RH: cadastra, corrige e remove colaboradores e dependentes (inclusive por planilha). Nada de catracas,
-  // exceto que remover um dependente também tira a face dele das catracas.
-  // "excluir" só é usado na remoção de dependentes.
-  rh: ["cadastro", "excluir"],
+  admin: ["cadastro", "presenca", "excluir", "relatorios", "facial", "historico", "sistema"],
+  // RH: cadastra, corrige e remove colaboradores e dependentes (inclusive por planilha) e consulta o
+  // Histórico de Fotos. Não faz carga nem remoção direta nas catracas; remover um dependente, porém,
+  // também tira a face dele das catracas. "excluir" só é usado na remoção de dependentes.
+  rh: ["cadastro", "excluir", "historico"],
 }
 
 /**
